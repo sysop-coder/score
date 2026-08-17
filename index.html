@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>教師成績查詢系統</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <style>
+    body { font-family: "Microsoft JhengHei", sans-serif; padding: 25px; background-color: #f5f7f9; color: #333; }
+    .container { max-width: 950px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+    .section { border: 1px solid #e0e6ed; padding: 20px; margin-bottom: 25px; border-radius: 8px; position: relative; }
+    h2 { margin-top: -35px; background: white; width: fit-content; padding: 0 10px; color: #3498db; font-size: 1.1rem; }
+    input[type="number"], input[type="file"], input[type="text"], input[type="password"], select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    input[type="number"] { width: 70px; margin-right: 10px; }
+    input[type="text"], input[type="password"] { width: 100%; box-sizing: border-box; }
+    select { width: 200px; margin-left: 10px; cursor: pointer; }
+    button { padding: 10px 15px; cursor: pointer; border: none; border-radius: 5px; transition: 0.3s; font-weight: bold; }
+    .btn-blue { background-color: #3498db; color: white; }
+    .btn-green { background-color: #27ae60; color: white; font-size: 1rem; }
+    .btn-red { background-color: #e74c3c; color: white; }
+    .btn-orange { background-color: #f39c12; color: white; }
+    .btn-purple { background-color: #9b59b6; color: white; width: 100%; font-size: 1.1rem; margin-top: 15px; }
+    .row { margin: 15px 0; }
+    #progressContainer {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.85); z-index: 2000;
+      flex-direction: column; justify-content: center; align-items: center;
+    }
+    .hourglass {
+      display: inline-block; position: relative; width: 64px; height: 64px;
+    }
+    .hourglass:after {
+      content: " "; display: block; border-radius: 50%; width: 0; height: 0;
+      margin: 8px; box-sizing: border-box; border: 26px solid #3498db;
+      border-color: #3498db transparent #3498db transparent;
+      animation: hourglass 1.2s infinite;
+    }
+    @keyframes hourglass {
+      0% { transform: rotate(0); animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19); }
+      50% { transform: rotate(900deg); animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1); }
+      100% { transform: rotate(1800deg); }
+    }
+    #progressBar {
+      margin-top: 15px; color: #3498db; font-weight: bold; font-size: 1.1rem; letter-spacing: 1px;
+    }
+    .data-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95rem; }
+    .data-table th, .data-table td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+    .data-table th { background-color: #f8f9fa; }
+    #alertOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 999; }
+    #alertBox { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 1000; text-align: center; min-width: 280px; }
+    .input-group { display: inline-flex; align-items: center; margin-right: 15px; }
+    .warning-text { color: #e74c3c; font-size: 0.9rem; font-weight: bold; margin-top: 5px; text-align: center; }
+    .switch-container { display: flex; align-items: center; justify-content: flex-start; margin-bottom: 12px; font-weight: bold; color: #2c3e50; font-size: 0.95rem; }
+    .toggle-switch { position: relative; display: inline-block; width: 46px; height: 24px; margin-right: 10px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .3s; border-radius: 24px; }
+    .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    input:checked + .toggle-slider { background-color: #22c55e; }
+    input:checked + .toggle-slider:before { transform: translateX(22px); }
+    .ans-col-toggle { transition: opacity 0.2s; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1 id="mainTitle">教師成績查詢系統</h1>
+
+  <div id="alertOverlay"></div>
+  <div id="alertBox">
+    <div id="alertMsg"></div>
+    <button class="btn-blue" onclick="closeAlert()">確定</button>
+  </div>
+
+  <div id="progressContainer">
+    <div class="hourglass"></div>
+    <div id="progressBar">系統處理中...</div>
+  </div>
+
+  <div id="teacherDashboard" class="section" style="display: none; border: 2px solid #27ae60; background-color: #fafffa;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #27ae60; margin-bottom: 15px; padding-bottom: 5px;">
+      <h2 id="dashboardTitle" style="color: #27ae60; background: #fafffa; margin: 0; border: none;">📊 教師成績自主查詢看板</h2>
+      <button class="btn-red" style="padding: 6px 15px; font-size: 0.9rem; margin-top: -10px;" onclick="handleLogout()">登出系統</button>
+    </div>
+
+    <div class="row" style="background: #eef9ee; padding: 12px; border-radius: 6px; font-weight: bold; margin-bottom: 20px;">
+      歡迎回來，<span id="userWelcomeName" style="color: #27ae60; font-size: 1.2rem;">老師</span>！
+      您的登入權限為：<span id="userWelcomeRole" style="color: #f39c12;">讀取中</span>
+    </div>
+    
+    <div id="queryControlRow" class="row" style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; border-bottom: 1px dashed #ccc; padding-bottom: 15px;">
+      <div>
+        <span style="font-weight:bold;">選擇查詢學期：</span>
+        <select id="viewYear" style="width: 120px;"></select>
+        <select id="viewSemester" style="width: 100px;"><option value="1">第1學期</option><option value="2">第2學期</option></select>
+      </div>
+      <div>
+        <span style="font-weight:bold;">選擇考試：</span>
+        <select id="viewExamType" style="width: 160px;">
+          <option value="第一次定期考">第一次定期考</option>
+          <option value="第二次定期考">第二次定期考</option>
+          <option value="第三次定期考">第三次定期考</option>
+          <option value="週考自然">週考自然</option>
+          <option value="週考英語">週考英語</option>
+          <option value="週考數學">週考數學</option>
+          <option value="週考體育">週考體育</option>
+        </select>
+      </div>
+      <div>
+        <span style="font-weight:bold;">可觀看班級科目：</span>
+        <select id="viewClassSubject" style="width: 220px;"></select>
+      </div>
+      <button class="btn-green" id="btnSubmitQuery" style="padding: 8px 20px;" onclick="fetchLiveReport()">立即查詢</button>
+    </div>
+
+    <div id="reportRenderPool" style="margin-top: 20px; background: white; padding: 15px; border: 1px solid #ddd; border-radius: 6px; min-height: 200px;">
+      <p style="color: #666; text-align: center; margin-top: 80px;">請選擇上方的學期、測驗與班級，並點擊「立即查詢」按鈕。</p>
+    </div>
+  </div>
+
+  <div id="assistantHeader" style="display: none; justify-content: space-between; align-items: center; background: #fffaf0; padding: 15px; border-radius: 8px; border: 2px solid #f39c12; margin-bottom: 20px;">
+    <div style="font-weight: bold; font-size: 1.1rem;">
+      歡迎回來，<span id="assistantName" style="color: #d35400; font-size: 1.3rem;"></span>！ 
+      您的登入權限為：<span style="color: #f39c12;">行政助理 💼</span>
+    </div>
+    <button class="btn-red" style="padding: 8px 20px; font-size: 1rem;" onclick="handleLogout()">登出系統</button>
+  </div>
+
+  <div id="adminPanel" style="display: none;">
+    <div style="background: #34495e; color: white; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; margin-bottom: 20px;">
+      🔒 系統管理員後台控制中心
+    </div>
+
+    <div id="adminSecStep0" class="section" style="border: 2px solid #9b59b6; background-color: #faf5ff;">
+      <h2>第零步：系統權限初始化 (連動試算表分頁)</h2>
+      <div class="row" style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+        <div>
+          <span style="font-weight:bold;">學年度：</span>
+          <select id="sysYear" style="width: 140px;"></select>
+        </div>
+        <div>
+          <span style="font-weight:bold;">學期：</span>
+          <select id="sysSemester" style="width: 120px;">
+            <option value="1">第 1 學期</option>
+            <option value="2">第 2 學期</option>
+          </select>
+        </div>
+        <div style="width: 100%; margin-top: 5px;">
+          <p style="font-size:0.9rem; color:#666; margin: 5px 0;">💡 請確認已將排課 CSV 內容完整貼入試算表中的【STC全校配課】分頁。</p>
+          <button class="btn-purple" style="width: auto; margin-top: 5px; padding: 8px 25px;" onclick="uploadSTC()">🔄 從試算表分頁同步並編譯最新權限字典</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="adminSecStep1" class="section">
+      <h2>第一步：匯入讀卡成績 (Excel/CSV)</h2>
+      <div class="row" style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-bottom: 15px;">
+        <div>
+          <span style="font-weight:bold;">學年度：</span>
+          <select id="dataYear" style="width: 140px;"></select>
+        </div>
+        <div>
+          <span style="font-weight:bold;">學期：</span>
+          <select id="dataSemester" style="width: 120px;">
+            <option value="1">第 1 學期</option>
+            <option value="2">第 2 學期</option>
+          </select>
+        </div>
+        <div>
+          <span style="font-weight:bold;">考試種類：</span>
+          <select id="dataExamType" style="width: 180px;">
+            <option value="" disabled selected>-- 請選擇考試 --</option>
+            <option value="第一次定期考">第一次定期考</option>
+            <option value="第二次定期考">第二次定期考</option>
+            <option value="第三次定期考">第三次定期考</option>
+            <option value="週考自然">週考自然</option>
+            <option value="週考英語">週考英語</option>
+            <option value="週考數學">週考數學</option>
+            <option value="週考體育">週考體育</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" />
+        <button class="btn-blue" onclick="uploadExcel()">讀取並匯入專屬檔案資料庫</button>
+      </div>
+    </div>
+
+    <div id="adminSecStep2" class="section">
+      <h2>第二步：輸入扣分名單</h2>
+      <div class="row" style="display: flex; flex-wrap: nowrap; gap: 10px; align-items: center; overflow-x: auto; padding-bottom: 5px;">
+        <input type="hidden" id="editRowIndex" value="">
+        <div class="input-group" style="white-space: nowrap;">班級：<input type="number" id="dClass" placeholder="701" style="width: 65px; margin-right: 0;"/></div>
+        <div class="input-group" style="white-space: nowrap;">座號：<input type="number" id="dSeat" style="width: 55px; margin-right: 0;"/></div>
+        <div class="input-group" style="white-space: nowrap;">科目：
+          <select id="dSubject" style="width: 80px; margin-left: 5px;">
+            <option value="國文">國文</option>
+            <option value="英語">英語</option>
+            <option value="英聽">英聽</option>
+            <option value="數學">數學</option>
+            <option value="自然">自然</option>
+            <option value="社會">社會</option>
+            <option value="健教">健教</option>
+            <option value="體育">體育</option>
+          </select>
+        </div>
+        <div class="input-group" style="white-space: nowrap;">扣分：<input type="number" id="dPoints" value="5" style="width: 50px; margin-right: 0;"/></div>
+        
+        <div class="input-group" style="white-space: nowrap; display: inline-flex; gap: 8px; align-items: center;">
+          代碼：<input type="number" id="dCode" placeholder="1~4" style="width: 65px; margin: 0;"/>
+          <button class="btn-blue" id="btnSaveDeduction" onclick="handleAddOrEditLocal()" style="margin: 0; white-space: nowrap; padding: 8px 15px;">加入列表</button>
+          <button class="btn-red" id="btnCancelEdit" onclick="cancelEdit()" style="display:none; margin: 0; white-space: nowrap; padding: 8px 15px;">取消編輯</button>
+        </div>
+      </div>
+      <div id="deductionListArea">
+        <table class="data-table">
+          <thead><tr><th>班級</th><th>座號</th><th>科目</th><th>扣分</th><th>代碼</th><th>操作</th></tr></thead>
+          <tbody id="deductionTableBody"><tr><td colspan="6">讀取中...</td></tr></tbody>
+        </table>
+      </div>
+      <button class="btn-purple" id="btnBatchSave" onclick="batchSaveToBackend()">💾 將上方列表完整儲存至試算表</button>
+      <div class="warning-text">⚠️ 編輯完扣分名單後，請務必點擊上方按鈕儲存，報表才會生效！</div>
+    </div>
+
+    <div id="adminSecStepFinal" class="section" style="border: 2px solid #27ae60;">
+      <h2>最終步：產生班級報表 (Excel)</h2>
+      <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <button class="btn-orange" id="btnExportExcel" onclick="exportExcel()" style="flex: 1; width: 100%;">匯出扣分後成績 (Excel)</button>
+      </div>
+    </div>
+  </div> 
+</div>
+
+<script>
+  let localDeductions = [];
+
+  function getCurrentAcademicTerm() {
+    const now = new Date();
+    const rocYear = now.getFullYear() - 1911;
+    const month = now.getMonth() + 1; 
+    let acYear, sem, exam;
+
+    if (month >= 8) {
+      acYear = rocYear; sem = "1";
+      if (month <= 10) exam = "第一次定期考"; else if (month <= 12) exam = "第二次定期考";
+    } else {
+      if (month === 1) {
+        acYear = rocYear - 1; sem = "1"; exam = "第三次定期考"; 
+      } else {
+        acYear = rocYear - 1; sem = "2";
+        if (month <= 4) exam = "第一次定期考"; else if (month === 5) exam = "第二次定期考"; else exam = "第三次定期考"; 
+      }
+    }
+    return { year: acYear.toString(), semester: sem, examType: exam };
+  }
+
+  function showAlert(msg) {
+    document.getElementById('alertMsg').innerText = msg;
+    document.getElementById('alertOverlay').style.display = 'block';
+    document.getElementById('alertBox').style.display = 'block';
+  }
+
+  function closeAlert() {
+    document.getElementById('alertOverlay').style.display = 'none';
+    document.getElementById('alertBox').style.display = 'none';
+  }
+
+  function updateProgress(val) {
+    const container = document.getElementById('progressContainer');
+    const barText = document.getElementById('progressBar');
+    
+    if (val === 0) {
+      container.style.display = 'none';
+    } else if (val === 100) {
+      barText.innerText = '處理完成！';
+      container.style.display = 'flex'; 
+    } else {
+      container.style.display = 'flex';
+      barText.innerText = '系統處理中... ' + val + '%';
+    }
+  }
+
+  window.onload = function() {
+    // 【修正】若已登出，setupDynamicMenus 仍需執行以顯示正確狀態，但避免在無憑證時打 API 造成誤判
+    // 先用本地時間渲染，登入後 verifySSOLogin 會再覆蓋
+    const localUser = localStorage.getItem('sysUserData');
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!localUser && !token) {
+      setupDynamicMenus(fallbackAcademicTerm());
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(currentTerm => {
+        setupDynamicMenus(currentTerm);
+      })
+      .withFailureHandler(err => {
+        console.warn("網路時間抓取失敗，退回本機時間運算:", err);
+        setupDynamicMenus(fallbackAcademicTerm());
+      })
+      .getServerAcademicTerm();
+  };
+
+  function setupDynamicMenus(currentTerm) {
+    const sysYearSelect = document.getElementById('sysYear');
+    const dataYearSelect = document.getElementById('dataYear');
+    const viewYearSelect = document.getElementById('viewYear');
+    
+    sysYearSelect.innerHTML = '';
+    dataYearSelect.innerHTML = '';
+    viewYearSelect.innerHTML = '';
+
+    const SYSTEM_LAUNCH_YEAR = 114; 
+    
+    const currentYear = parseInt(currentTerm.year, 10);
+    const startYear = Math.max(SYSTEM_LAUNCH_YEAR, currentYear - 2);
+
+    for (let y = currentYear; y >= startYear; y--) {
+      const optionHtml = `<option value="${y}">${y} 學年度</option>`;
+      sysYearSelect.insertAdjacentHTML('beforeend', optionHtml);
+      dataYearSelect.insertAdjacentHTML('beforeend', optionHtml);
+      viewYearSelect.insertAdjacentHTML('beforeend', optionHtml);
+    }
+
+    const savedUser = localStorage.getItem('sysUserData');
+    if (savedUser) {
+      const userData = JSON.parse(savedUser);
+      const savedYear = localStorage.getItem('sysYear') || currentTerm.year;
+      const savedSemester = localStorage.getItem('sysSemester') || currentTerm.semester;
+      
+      if (document.querySelector(`#sysYear option[value="${savedYear}"]`)) {
+        document.getElementById('sysYear').value = savedYear;
+        document.getElementById('dataYear').value = savedYear;
+        document.getElementById('viewYear').value = savedYear;
+      } else {
+        document.getElementById('sysYear').value = currentYear;
+        document.getElementById('dataYear').value = currentYear;
+        document.getElementById('viewYear').value = currentYear;
+      }
+
+      document.getElementById('sysSemester').value = savedSemester;
+      document.getElementById('dataSemester').value = savedSemester;
+      
+      renderDashboard(userData, savedYear, savedSemester);
+    } else {
+      document.getElementById('sysYear').value = currentYear;
+      document.getElementById('sysSemester').value = currentTerm.semester;
+      document.getElementById('dataYear').value = currentYear;
+      document.getElementById('dataSemester').value = currentTerm.semester;
+    }
+    
+    loadDeductionList();
+  }
+
+  function fallbackAcademicTerm() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const rocYear = year - 1911;
+
+    let acYear, sem, exam;
+    if (month >= 8) {
+      acYear = rocYear; sem = "1";
+      if (month <= 10) exam = "第一次定期考"; else if (month <= 12) exam = "第二次定期考"; else exam = "第三次定期考";
+    } else {
+      if (month === 1) {
+        acYear = rocYear - 1; sem = "1"; exam = "第三次定期考"; 
+      } else {
+        acYear = rocYear - 1; sem = "2";
+        if (month <= 4) exam = "第一次定期考"; else if (month === 5) exam = "第二次定期考"; else exam = "第三次定期考"; 
+      }
+    }
+    return { year: acYear.toString(), semester: sem, examType: exam };
+  }
+
+  function renderDashboard(userData, sysYear, sysSemester) {
+    document.getElementById('viewYear').value = sysYear;
+    document.getElementById('viewSemester').value = sysSemester;
+
+    const savedExam = localStorage.getItem('sysExamType');
+    if (savedExam) {
+      document.getElementById('viewExamType').value = savedExam;
+    } else {
+      document.getElementById('viewExamType').value = getCurrentAcademicTerm().examType;
+    }
+
+    let roleText = "一般任課教師";
+    if (userData.role === 'homeroom') roleText = `導師 (導師班級：${userData.homeroomClass})`;
+    if (userData.role === 'admin') roleText = "系統管理員 👑";
+    if (userData.role === 'executive') roleText = "高階主管 (校長/主任)";
+    if (userData.role === 'assistant') roleText = "行政助理 💼";
+    if (userData.role === 'convener') roleText = `領域召集人 (${userData.convenerTitle})`;
+    
+    document.getElementById('userWelcomeName').innerText = userData.name;
+    document.getElementById('userWelcomeRole').innerText = roleText;
+
+    const selectElement = document.getElementById('viewClassSubject');
+    selectElement.innerHTML = ''; 
+
+    if (userData.role === 'homeroom' && userData.homeroomClass) {
+      const opt = document.createElement('option');
+      opt.value = `HOMEROOM_${userData.homeroomClass}`;
+      opt.textContent = `⭐ 導師班級：${userData.homeroomClass} (觀看全班成績單)`;
+      selectElement.appendChild(opt);
+    }
+
+    const allowedSubjects = ['數學', '國文', '自然', '公民', '英語', '英聽', '社會', '健教', '體育', '歷史', '地理'];
+    if (userData.classes && userData.classes.length > 0) {
+      let teacherSubjects = {};
+
+      userData.classes.forEach(clsTag => {
+        if(clsTag === "ALL") return;
+
+        if(clsTag.startsWith("DOMAIN_")) {
+          const domain = clsTag.replace("DOMAIN_", "");
+          const optDash = document.createElement('option');
+          optDash.value = clsTag;
+          optDash.textContent = `🎯 觀看【${domain}領域】學情戰情總表`;
+          selectElement.appendChild(optDash);
+          return; 
+        }
+
+        const [c, s] = clsTag.split('_');
+        if (allowedSubjects.includes(s)) {
+          if (!teacherSubjects[s]) teacherSubjects[s] = [];
+          teacherSubjects[s].push(c);
+
+          const opt = document.createElement('option');
+          opt.value = clsTag;
+          opt.textContent = `任教班級：${c} 班 — ${s}`;
+          selectElement.appendChild(opt);
+        }
+      });
+
+      for (let sub in teacherSubjects) {
+        let classesJoin = teacherSubjects[sub].join(',');
+        const optTeacherDash = document.createElement('option');
+        optTeacherDash.value = `TEACHER_OVERVIEW_${sub}|${classesJoin}`;
+        optTeacherDash.textContent = `👩‍🏫 ${sub} — 任教班級戰情總表`;
+        optTeacherDash.style.fontWeight = 'bold';
+        optTeacherDash.style.color = '#16a085';
+        
+        if (selectElement.options.length > 0 && selectElement.options[0].value.startsWith('HOMEROOM_')) {
+          selectElement.insertBefore(optTeacherDash, selectElement.options[1]);
+        } else {
+          selectElement.insertBefore(optTeacherDash, selectElement.firstChild);
+        }
+      }
+    }
+
+    if (userData.role === 'admin' || userData.role === 'executive') {
+      const optDash = document.createElement('option');
+      optDash.value = "ALL_DASHBOARD";
+      optDash.textContent = "🏢 觀看【全校學情戰情總表】";
+      selectElement.appendChild(optDash);
+    }
+
+    if (userData.role === 'assistant') {
+      document.getElementById('teacherDashboard').style.display = 'none'; 
+      document.getElementById('mainTitle').style.display = 'none';        
+      document.getElementById('assistantHeader').style.display = 'flex';  
+      document.getElementById('assistantName').innerText = userData.name;
+      document.getElementById('adminPanel').style.display = 'block';      
+      document.getElementById('adminSecStep0').style.display = 'none';
+    } else {
+      document.getElementById('teacherDashboard').style.display = 'block';
+      document.getElementById('mainTitle').style.display = 'block';
+      document.getElementById('mainTitle').innerText = '教師成績查詢系統';
+      
+      if(document.getElementById('assistantHeader')) document.getElementById('assistantHeader').style.display = 'none';
+
+      if (userData.role === 'admin') {
+        document.getElementById('adminPanel').style.display = 'block';
+        document.getElementById('adminSecStep0').style.display = 'block';
+      } else {
+        document.getElementById('adminPanel').style.display = 'none';
+      }
+    }
+  }
+
+      function handleLogout() {
+    try { clearTimeout(idleTimer); } catch(e) {}
+    // 【安全性修補 v3】移除閒置監聽器，防止登出畫面還在背景觸發 resetIdleTimer
+    try {
+      ['mousemove','keydown','scroll','click','touchstart'].forEach(evt => {
+        document.removeEventListener(evt, resetIdleTimer);
+      });
+    } catch(e) {}
+    // 嘗試通知後端刪除 Session
+    try {
+      const sid = localStorage.getItem('sysSessionId');
+      if (sid) {
+        google.script.run.withFailureHandler(()=>{}).logoutSession(sid);
+      }
+    } catch(e) {}
+    localStorage.removeItem('sysUserData');
+    localStorage.removeItem('sysSessionId');
+    localStorage.removeItem('sysYear');
+    localStorage.removeItem('sysSemester');
+    localStorage.removeItem('sysExamType');
+    localStorage.removeItem('sysLastActive'); 
+    
+    showTerminalScreen("✅ 您已安全登出", "系統暫存紀錄已徹底清除，後端 Session 已註銷，所有監聽器已移除。<br>為確保資訊安全，請重新登入或關閉此分頁。", true);
+  }
+
+  function fetchLiveReport() {
+    const sysYear = document.getElementById('viewYear').value;
+    const sysSemester = document.getElementById('viewSemester').value;
+    const examType = document.getElementById('viewExamType').value;
+    const clsSub = document.getElementById('viewClassSubject').value;
+
+    if(!clsSub) { showAlert('目前沒有可查詢的班級權限。'); return; }
+    
+    const queryBtn = document.querySelector('button[onclick="fetchLiveReport()"]');
+    if (queryBtn) {
+      queryBtn.disabled = true;
+      queryBtn.style.backgroundColor = '#95a5a6';
+      queryBtn.style.cursor = 'not-allowed';
+      queryBtn.innerText = '查詢中...⏳';
+    }
+
+    localStorage.setItem('sysYear', sysYear);
+    localStorage.setItem('sysSemester', sysSemester);
+    localStorage.setItem('sysExamType', examType);
+    
+    const pool = document.getElementById('reportRenderPool');
+    pool.innerHTML = '<div style="text-align:center; padding: 50px 0;"><h3 style="color:#3498db;">🚀 正在開啟雲端歷史成績庫，極速運算中...</h3><p style="color:#7f8c8d;">這只需要零點幾秒的時間</p></div>';
+    
+    google.script.run
+      .withSuccessHandler(res => {
+        if (queryBtn) {
+          queryBtn.disabled = false;
+          queryBtn.style.backgroundColor = '#27ae60';
+          queryBtn.style.cursor = 'pointer';
+          queryBtn.innerText = '立即查詢';
+        }
+
+        if (res.success) {
+          pool.innerHTML = res.html;
+          
+          const ctx = document.getElementById('myClassChart');
+          if (ctx) {
+            const classData = JSON.parse(ctx.getAttribute('data-class'));
+            const gradeData = JSON.parse(ctx.getAttribute('data-grade'));
+            const bucketLabels = ["100", "90-99", "80-89", "70-79", "60-69", "50-59", "40-49", "30-39", "20-29", "10-19", "0-9"];
+            
+            new Chart(ctx, {
+              type: 'line',
+              data: {
+                labels: bucketLabels,
+                datasets: [
+                  {
+                    label: '本班比例 (%)',
+                    data: classData,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    borderWidth: 3,
+                    pointBackgroundColor: '#3498db',
+                    pointRadius: 4,
+                    fill: true,
+                    tension: 0.3
+                  },
+                  {
+                    label: '全校平均比例 (%)',
+                    data: gradeData,
+                    borderColor: '#e67e22',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointBackgroundColor: '#e67e22',
+                    pointRadius: 3,
+                    tension: 0.3
+                  }
+                ]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top', labels: { font: { size: 14 } } } },
+                scales: {
+                  y: { beginAtZero: true, color: '#333', title: { display: true, text: '佔比 (%)' } },
+                  x: { grid: { display: false } }
+                }
+              }
+            });
+          }
+        } else {
+          pool.innerHTML = `<div style="text-align:center; padding: 40px 0;"><h3 style="color:#e74c3c;">❌ 查詢失敗</h3><p style="color:#555;">${res.message}</p></div>`;
+        }
+      })
+      .withFailureHandler(err => {
+        if (queryBtn) {
+          queryBtn.disabled = false;
+          queryBtn.style.backgroundColor = '#27ae60';
+          queryBtn.style.cursor = 'pointer';
+          queryBtn.innerText = '立即查詢';
+        }
+        pool.innerHTML = `<div style="text-align:center; padding: 40px 0;"><h3 style="color:#e74c3c;">❌ 系統連線異常</h3><p>${err}</p></div>`;
+      })
+      .generateLiveReportHtml(sysYear, sysSemester, examType, clsSub);
+  }
+
+  function toggleAnswerView() {
+    const isChecked = document.getElementById('ansToggle').checked;
+    const answerCols = document.querySelectorAll('.ans-col-toggle'); 
+    answerCols.forEach(col => { col.style.display = isChecked ? 'table-cell' : 'none'; });
+  }
+
+  function uploadSTC() {
+    const sysYear = document.getElementById('sysYear').value;
+    const sysSemester = document.getElementById('sysSemester').value;
+    updateProgress(50);
+    google.script.run
+      .withSuccessHandler(res => {
+        updateProgress(100);
+        showAlert(res);
+        setTimeout(() => { document.getElementById('progressContainer').style.display = 'none'; }, 2000);
+      })
+      .withFailureHandler(err => {
+        updateProgress(0);
+        showAlert('同步失敗：' + err);
+      })
+      .compileUserPermissionsFromSheet(sysYear, sysSemester);
+  }
+
+  function uploadExcel() {
+    const fileInput = document.getElementById('excelFile');
+    const dataYear = document.getElementById('dataYear').value;
+    const dataSemester = document.getElementById('dataSemester').value;
+    const dataExamType = document.getElementById('dataExamType').value;
+
+    if (!dataExamType) { showAlert('⚠️ 系統安全防護：請先確認並選擇「考試種類」，再進行匯入！'); return; }
+    if (!fileInput.files || fileInput.files.length === 0) { showAlert('請先選擇檔案！'); return; }
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    const isCSV = file.name.toLowerCase().endsWith('.csv');
+
+    updateProgress(10);
+    reader.onload = function(e) {
+      let workbook;
+      try {
+        if (isCSV) { workbook = XLSX.read(e.target.result, {type: 'string'}); } 
+        else { workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'}); }
+      } catch (error) { 
+        updateProgress(0);
+        showAlert('檔案解析失敗，請確認檔案格式是否正確。'); return; 
+      }
+      
+      updateProgress(40);
+      const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1, defval: ''});
+      
+      let processedData = [];
+      let blankCount = 0;
+      for(let row of jsonData) {
+        if(row.every(c => c === "")) { blankCount++; if(blankCount > 5) break; } else { blankCount = 0; }
+        processedData.push(row);
+      }
+      
+      updateProgress(60);
+      google.script.run
+        .withSuccessHandler(res => {
+          updateProgress(100);
+          showAlert(res);
+          setTimeout(() => { document.getElementById('progressContainer').style.display = 'none'; }, 2000);
+          fileInput.value = ''; 
+        })
+        .withFailureHandler(err => {
+          updateProgress(0);
+          showAlert('匯入專屬資料庫失敗：' + err);
+        })
+        .saveExamDataToDatabase(dataYear, dataSemester, dataExamType, processedData);
+    };
+    if (isCSV) { reader.readAsText(file, 'Big5'); } else { reader.readAsArrayBuffer(file); }
+  }
+
+  function loadDeductionList() {
+    google.script.run
+      .withSuccessHandler(data => {
+        if (data.length > 1) { localDeductions = data.slice(1); } else { localDeductions = []; }
+        renderDeductionTable();
+      })
+      .withFailureHandler(err => {
+        // 捕獲錯誤並顯示給管理員
+        showAlert('讀取扣分名單失敗：' + err);
+        // 將卡住的「讀取中...」替換為錯誤提示
+        document.getElementById('deductionTableBody').innerHTML = '<tr><td colspan="6" style="color: #e74c3c; font-weight: bold;">❌ 資料讀取失敗，請重新整理頁面</td></tr>';
+      })
+      .getDeductionList();
+  }
+
+  function renderDeductionTable() {
+    const tbody = document.getElementById('deductionTableBody');
+    if (localDeductions.length === 0) { tbody.innerHTML = '<tr><td colspan="6">目前無扣分資料</td></tr>'; return; }
+    let html = '';
+    localDeductions.forEach((row, i) => {
+      html += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td><td>${row[4]}</td><td>
+          <button class="btn-orange" onclick="startEdit(${i}, '${row[0]}', '${row[1]}', '${row[2]}', '${row[3]}', '${row[4]}')">編輯</button>
+          <button class="btn-red" onclick="deleteLocalItem(${i})">刪除</button></td></tr>`;
+    });
+    tbody.innerHTML = html;
+  }
+
+  function handleAddOrEditLocal() {
+    const c = document.getElementById('dClass').value;
+    const s = document.getElementById('dSeat').value;
+    const sub = document.getElementById('dSubject').value;
+    const p = document.getElementById('dPoints').value;
+    const code = document.getElementById('dCode').value;
+    const editIdx = document.getElementById('editRowIndex').value;
+    
+    if (!c || !s || !sub || !p || !code) { showAlert('所有欄位皆請填寫完整'); return; }
+    
+    if (editIdx !== "") {
+      localDeductions[parseInt(editIdx)] = [c, s, sub, p, code];
+      cancelEdit();
+    } else {
+      localDeductions.push([c, s, sub, p, code]);
+      document.getElementById('dClass').value = '';
+      document.getElementById('dSeat').value = '';
+    }
+    renderDeductionTable();
+  }
+
+  function startEdit(rowIdx, c, s, sub, p, code) {
+    document.getElementById('editRowIndex').value = rowIdx;
+    document.getElementById('dClass').value = c; document.getElementById('dSeat').value = s;
+    document.getElementById('dSubject').value = sub; document.getElementById('dPoints').value = p; document.getElementById('dCode').value = code;
+    document.getElementById('btnSaveDeduction').innerText = '儲存修改';
+    document.getElementById('btnCancelEdit').style.display = 'inline-block';
+  }
+
+  function cancelEdit() {
+    document.getElementById('editRowIndex').value = '';
+    document.getElementById('dClass').value = ''; document.getElementById('dSeat').value = '';
+    document.getElementById('dSubject').value = '國文'; document.getElementById('dPoints').value = '5'; document.getElementById('dCode').value = '';
+    document.getElementById('btnSaveDeduction').innerText = '加入列表';
+    document.getElementById('btnCancelEdit').style.display = 'none';
+  }
+
+  function deleteLocalItem(rowIdx) {
+    if (!confirm('確定要從列表中移除這筆資料嗎？')) return;
+    localDeductions.splice(rowIdx, 1); renderDeductionTable();
+  }
+
+  function batchSaveToBackend() {
+    const btn = document.getElementById('btnBatchSave');
+    const dataYear = document.getElementById('dataYear').value;
+    const dataSemester = document.getElementById('dataSemester').value;
+    const dataExamType = document.getElementById('dataExamType').value;
+
+    btn.disabled = true; btn.innerText = '儲存中...';
+    google.script.run
+      .withSuccessHandler(res => {
+        showAlert(res); btn.disabled = false; btn.innerText = '💾 將上方列表完整儲存至試算表';
+      })
+      .withFailureHandler(err => {
+        showAlert('儲存失敗：' + err); btn.disabled = false; btn.innerText = '💾 將上方列表完整儲存至試算表';
+      })
+      .batchSaveDeductions(dataYear, dataSemester, dataExamType, localDeductions);
+  }
+
+ function exportExcel() {
+    const btnExport = document.getElementById('btnExportExcel');
+    const dataYear = document.getElementById('dataYear').value;
+    const dataSemester = document.getElementById('dataSemester').value;
+    const dataExamType = document.getElementById('dataExamType').value;
+    
+    if (!dataExamType) { showAlert('⚠️ 系統安全防護：請先確認並選擇「考試種類」，再進行資料匯出！'); return; }
+
+    btnExport.disabled = true; btnExport.innerText = '正在讀取雲端最新資料...';
+    updateProgress(30);
+
+    google.script.run
+      .withSuccessHandler(exportData => {
+        updateProgress(70);
+        const wsDetail = XLSX.utils.aoa_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, wsDetail, `${dataExamType}_原始資料`);
+        const fileName = `豐東國中_${dataYear}-${dataSemester}_${dataExamType}_成績資料表.xlsx`;
+        XLSX.writeFile(wb, fileName);
+        updateProgress(100);
+        btnExport.disabled = false; btnExport.innerText = '匯出扣分後成績 (Excel)';
+        setTimeout(() => { document.getElementById('progressContainer').style.display = 'none'; }, 2000);
+      })
+      .withFailureHandler(err => {
+        btnExport.disabled = false; btnExport.innerText = '匯出扣分後成績 (Excel)';
+        showAlert('匯出失敗：' + err);
+      })
+      .getRawSheetData(dataYear, dataSemester, dataExamType); 
+  }
+
+
+
+// =====================================================================
+  // 🛑 終端安全畫面 - v3 手動導向版
+  // =====================================================================
+  function showTerminalScreen(title, message, showReloginBtn) {
+    const btnHtml = showReloginBtn ? 
+      `<a href="https://cjh123-coder.github.io/score/?_relogin=${Date.now()}" target="_top" style="display:inline-block; margin-top:25px; padding:12px 30px; background-color:#3498db; color:white; text-decoration:none; border-radius:5px; font-size:1.1rem; font-weight:bold; box-shadow:0 4px 6px rgba(0,0,0,0.1);">🔐 重新登入系統</a>
+       <p style="color:#999; font-size:0.9rem; margin-top:15px;">請點擊上方按鈕重新登入</p>` :
+      `<button onclick="window.close()" style="margin-top: 25px; padding: 10px 25px; background-color: #95a5a6; color: white; border: none; border-radius: 5px; font-size: 1rem; cursor: pointer;">關閉此分頁</button>`;
+
+    document.body.innerHTML = `
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Microsoft JhengHei', sans-serif; background-color: #f4f6f9; text-align: center; padding: 20px;">
+        <h2 style="color: #27ae60; margin-bottom: 15px; font-size: 1.8rem;">${title}</h2>
+        <p style="color: #555; font-size: 1.1rem; line-height: 1.6; max-width: 500px;">${message}</p>
+        ${btnHtml}
+      </div>
+    `;
+  }
+
+// =====================================================================
+  // 🛡️ 系統全域常數設定 (GitHub Pages 專用)
+  // =====================================================================
+  
+  // 1. 從網址列取得 Token
+  const urlParams = new URLSearchParams(window.location.search);
+  const ssoToken = urlParams.get('token') || "";
+  const CURRENT_APP_URL = "https://cjh123-coder.github.io/score/"; // 固定入口，避免帶 _logout 或 token 回去
+
+  // ⚠️ 部署必填區：
+  const SSO_CENTER_URL = "https://script.google.com/macros/s/AKfycbygUaH-YTSfS-XtiADst5U4NAf_gjHW-xagi1WJ1diTGdQvQfENq2zR_Gxxi9dlqruB/exec"; 
+  const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw4Zcvkvre7AZNVJ2qGCzhme9Ra36P4u6a3SMCtmH2e1AJm9oOBC7Pv8rDvM-y17EAu/exec"; 
+
+  // 🔌 建立 Google.script.run 代理 (Polyfill) 以便脫離 GAS 環境
+  const google = {
+    script: {
+      run: new Proxy({}, {
+        get: function(target, prop) {
+          if (prop === 'withSuccessHandler') {
+            return function(callback) { target._onSuccess = callback; return new Proxy(target, this); }.bind(this);
+          }
+          if (prop === 'withFailureHandler') {
+            return function(callback) { target._onFailure = callback; return new Proxy(target, this); }.bind(this);
+          }
+          return function(...args) {
+            const payload = { method: prop, args: args };
+            const successCb = target._onSuccess;
+            const failureCb = target._onFailure;
+            target._onSuccess = null; target._onFailure = null;
+
+            // 【安全性修補】每次請求都帶上 sessionId
+            const sessionId = localStorage.getItem('sysSessionId') || "";
+            const securePayload = { ...payload, sessionId: sessionId };
+            fetch(GAS_API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify(securePayload)
+            })
+            .then(res => res.json())
+            .then(result => {
+              if(result.status === 'success' && successCb) successCb(result.data);
+              else if(result.status === 'error' && failureCb) failureCb(result.message);
+            })
+            .catch(err => { console.error(err); if(failureCb) failureCb(err.toString()); });
+          };
+        }
+      })
+    }
+  };
+
+  // 3. 網頁一載入，立刻啟動攔截檢查
+  document.addEventListener("DOMContentLoaded", function() {
+    checkSSOStatus();
+  });
+
+  function checkSSOStatus() {
+    // 若是登出剛回來，網址會有 _logout 或 _relogin，仍然要導向 SSO 登入頁
+    const _url = new URL(window.location.href);
+    if (_url.searchParams.has('_logout')) {
+      console.log("偵測到登出回跳，準備導向登入頁");
+    }
+    const localUser = localStorage.getItem('sysUserData');
+
+    if (localUser) {
+      const lastActive = localStorage.getItem('sysLastActive');
+      if (lastActive && (Date.now() - parseInt(lastActive, 10) > 5 * 60 * 1000)) {
+        console.log("🔒 偵測到離線閒置已逾時，自動清除舊憑證...");
+        localStorage.removeItem('sysUserData');
+        localStorage.removeItem('sysYear');
+        localStorage.removeItem('sysSemester');
+        localStorage.removeItem('sysExamType');
+        localStorage.removeItem('sysSessionId');
+        localStorage.removeItem('sysLastActive');
+        // 【修正】離線逾時不再跳轉到 script.google.com，直接顯示終端畫面，避免 拒絕連線
+        showTerminalScreen("⏳ 閒置逾時，已自動登出", "您已離線閒置超過 5 分鐘，系統已將您登出。<br>請重新登入以繼續使用。", true);
+        return;
+      }
+      console.log("SSO 狀態：已登入，正常載入系統...");
+      return; 
+    }
+
+    if (ssoToken) {
+      document.body.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; background-color: #f4f6f9;">
+          <h2 style="color: #1a73e8; margin-bottom: 10px; background: transparent; padding: 0; border: none;">🔄 豐東國中 SSO 身分驗證中...</h2>
+          <p style="color: #555;">正在安全載入您的專屬學情資料，請稍候</p>
+        </div>
+      `;
+
+      const currentTerm = getCurrentAcademicTerm();
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res.success) {
+            let userData = res.userData;
+            localStorage.setItem('sysUserData', JSON.stringify(userData));
+            if (res.sessionId) localStorage.setItem('sysSessionId', res.sessionId);
+            localStorage.setItem('sysYear', currentTerm.year);
+            localStorage.setItem('sysSemester', currentTerm.semester);
+            window.location.replace(CURRENT_APP_URL);
+          } else {
+            alert("SSO 驗證失敗：" + res.message);
+            window.location.replace(SSO_CENTER_URL + "?redirect=" + encodeURIComponent(CURRENT_APP_URL));
+          }
+        })
+        .withFailureHandler(function(err) {
+          alert("伺服器連線異常：" + err);
+        })
+        .verifySSOLogin(currentTerm.year, currentTerm.semester, ssoToken);
+
+    } else {
+      // 【修正】使用 replace + encode，避免歷史紀錄堆疊與 X-Frame-Options 阻擋
+      window.location.replace(SSO_CENTER_URL + "?redirect=" + encodeURIComponent(CURRENT_APP_URL));
+    }
+  }
+
+  let idleTimer;
+  const IDLE_TIMEOUT_MS = 5 * 60 * 1000; 
+
+  function resetIdleTimer() {
+    if (!localStorage.getItem('sysUserData')) return;
+    localStorage.setItem('sysLastActive', Date.now().toString());
+    clearTimeout(idleTimer);
+    
+    idleTimer = setTimeout(() => {
+      console.log("系統偵測到閒置超過 5 分鐘，啟動強制登出程序...");
+      localStorage.removeItem('sysUserData');
+      localStorage.removeItem('sysYear');
+      localStorage.removeItem('sysSemester');
+      localStorage.removeItem('sysExamType');
+      localStorage.removeItem('sysSessionId');
+      localStorage.removeItem('sysLastActive'); 
+      
+      // 【v3 定版】閒置逾時也改手動按鈕，不自動跳轉
+      showTerminalScreen("⏳ 閒置逾時，已自動登出", "您已閒置超過 5 分鐘，系統基於安全考量已將您登出。<br>請重新登入以繼續使用。", true);
+    }, IDLE_TIMEOUT_MS);
+  }
+
+  ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'].forEach(event => {
+    document.addEventListener(event, resetIdleTimer);
+  });
+
+  document.addEventListener("DOMContentLoaded", function() {
+    resetIdleTimer();
+  });
+
+  window.addEventListener('storage', function(e) {
+    if (e.key === 'sysUserData' && !e.newValue) {
+      console.log("🔒 偵測到其他分頁已登出，同步封鎖本分頁...");
+      // ✅ 跨分頁登出直接顯示畫面，不再跳轉
+      showTerminalScreen("🔒 同步登出完成", "系統偵測到您已在其他分頁執行登出，本分頁已同步關閉存取權限。<br>請關閉此分頁。");
+    }
+  });
+</script>
+</body>
+</html>
