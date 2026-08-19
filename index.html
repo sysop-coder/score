@@ -795,7 +795,7 @@
   // =====================================================================
   function showTerminalScreen(title, message, showReloginBtn) {
     const btnHtml = showReloginBtn ? 
-      `<a href="https://cjh123-coder.github.io/score/?_relogin=${Date.now()}" target="_top" style="display:inline-block; margin-top:25px; padding:12px 30px; background-color:#3498db; color:white; text-decoration:none; border-radius:5px; font-size:1.1rem; font-weight:bold; box-shadow:0 4px 6px rgba(0,0,0,0.1);">🔐 重新登入系統</a>
+      `<a href="https://sysop-coder.github.io/score/?_relogin=${Date.now()}" target="_top" style="display:inline-block; margin-top:25px; padding:12px 30px; background-color:#3498db; color:white; text-decoration:none; border-radius:5px; font-size:1.1rem; font-weight:bold; box-shadow:0 4px 6px rgba(0,0,0,0.1);">🔐 重新登入系統</a>
        <p style="color:#999; font-size:0.9rem; margin-top:15px;">請點擊上方按鈕重新登入</p>` :
       `<button onclick="window.close()" style="margin-top: 25px; padding: 10px 25px; background-color: #95a5a6; color: white; border: none; border-radius: 5px; font-size: 1rem; cursor: pointer;">關閉此分頁</button>`;
 
@@ -815,11 +815,11 @@
   // 1. 從網址列取得 Token
   const urlParams = new URLSearchParams(window.location.search);
   const ssoToken = urlParams.get('token') || "";
-  const CURRENT_APP_URL = "https://cjh123-coder.github.io/score/"; // 固定入口，避免帶 _logout 或 token 回去
+  const CURRENT_APP_URL = "https://sysop-coder.github.io/score/"; // 固定入口，避免帶 _logout 或 token 回去
 
   // ⚠️ 部署必填區：
-  const SSO_CENTER_URL = "https://script.google.com/macros/s/AKfycbygUaH-YTSfS-XtiADst5U4NAf_gjHW-xagi1WJ1diTGdQvQfENq2zR_Gxxi9dlqruB/exec"; 
-  const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw4Zcvkvre7AZNVJ2qGCzhme9Ra36P4u6a3SMCtmH2e1AJm9oOBC7Pv8rDvM-y17EAu/exec"; 
+  const SSO_CENTER_URL = "https://script.google.com/macros/s/AKfycbwNoYW7a7GQ2IhYKXSPgIApSmxyy_aXY6Vud3IUuq3Vz1Sm79AgV9CWUnauKGYHyjbp/exec"; 
+  const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzE6B0K7PdN_13GA9fL8pLNmkVFLiZ9jP9BixmtexGKX4A347ncxPznF2cYf-AjxeXf/exec"; 
 
   // 🔌 建立 Google.script.run 代理 (Polyfill) 以便脫離 GAS 環境
   const google = {
