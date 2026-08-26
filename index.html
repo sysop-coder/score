@@ -312,7 +312,7 @@
     dataYearSelect.innerHTML = '';
     viewYearSelect.innerHTML = '';
 
-    const SYSTEM_LAUNCH_YEAR = 114; 
+    const SYSTEM_LAUNCH_YEAR = 115; 
     
     const currentYear = parseInt(currentTerm.year, 10);
     const startYear = Math.max(SYSTEM_LAUNCH_YEAR, currentYear - 2);
@@ -399,14 +399,26 @@
     const selectElement = document.getElementById('viewClassSubject');
     selectElement.innerHTML = ''; 
 
+    const allowedSubjects = ['數學', '國文', '自然', '公民', '英語', '英聽', '社會', '健教', '體育', '歷史', '地理'];
+
     if (userData.role === 'homeroom' && userData.homeroomClass) {
       const opt = document.createElement('option');
       opt.value = `HOMEROOM_${userData.homeroomClass}`;
       opt.textContent = `⭐ 導師班級：${userData.homeroomClass} (觀看全班成績單)`;
       selectElement.appendChild(opt);
-    }
 
-    const allowedSubjects = ['數學', '國文', '自然', '公民', '英語', '英聽', '社會', '健教', '體育', '歷史', '地理'];
+      // 變更：改為單一「班級單科報表看板」選項，點入後再由後端動態產生有成績的按鈕
+      const singleDashOpt = document.createElement('option');
+      singleDashOpt.value = `HOMEROOM_SUBJECTS_${userData.homeroomClass}`;
+      singleDashOpt.textContent = `⭐ 導師單科報表看板：${userData.homeroomClass} 班`;
+      selectElement.appendChild(singleDashOpt);
+
+      // 👇 這是這次新增的：全科報表看板選項
+      const allSubjectsDashOpt = document.createElement('option');
+      allSubjectsDashOpt.value = `HOMEROOM_ALL_SUBJECTS_${userData.homeroomClass}`;
+      allSubjectsDashOpt.textContent = `⭐ 導師全科分數與排名：${userData.homeroomClass} 班`;
+      selectElement.appendChild(allSubjectsDashOpt);
+    }
     if (userData.classes && userData.classes.length > 0) {
       let teacherSubjects = {};
 
@@ -502,7 +514,7 @@
     localStorage.removeItem('sysExamType');
     localStorage.removeItem('sysLastActive'); 
     
-    showTerminalScreen("✅ 您已安全登出", "您已超逾5分鐘未使用，系統已自動為您登出。<br>為確保資訊安全，請重新登入或關閉此分頁。", true);
+    showTerminalScreen("✅ 您已安全登出", "您已超逾10分鐘未使用，系統已自動為您登出。<br>為確保資訊安全，請重新登入或關閉此分頁。", true);
   }
 
   function fetchLiveReport() {
@@ -876,7 +888,7 @@
 
     if (localUser) {
       const lastActive = localStorage.getItem('sysLastActive');
-      if (lastActive && (Date.now() - parseInt(lastActive, 10) > 5 * 60 * 1000)) {
+      if (lastActive && (Date.now() - parseInt(lastActive, 10) > 10 * 60 * 1000)) {
         console.log("🔒 偵測到離線閒置已逾時，自動清除舊憑證...");
         localStorage.removeItem('sysUserData');
         localStorage.removeItem('sysYear');
@@ -885,7 +897,7 @@
         localStorage.removeItem('sysSessionId');
         localStorage.removeItem('sysLastActive');
         // 【修正】離線逾時不再跳轉到 script.google.com，直接顯示終端畫面，避免 拒絕連線
-        showTerminalScreen("⏳ 閒置逾時，已自動登出", "您已離線閒置超過 5 分鐘，系統已將您登出。<br>請重新登入以繼續使用。", true);
+        showTerminalScreen("⏳ 閒置逾時，已自動登出", "您已離線閒置超過 10 分鐘，系統已將您登出。<br>請重新登入以繼續使用。", true);
         return;
       }
       console.log("SSO 狀態：已登入，正常載入系統...");
@@ -928,7 +940,7 @@
   }
 
   let idleTimer;
-  const IDLE_TIMEOUT_MS = 5 * 60 * 1000; 
+  const IDLE_TIMEOUT_MS = 10 * 60 * 1000; 
 
   function resetIdleTimer() {
     if (!localStorage.getItem('sysUserData')) return;
@@ -936,7 +948,7 @@
     clearTimeout(idleTimer);
     
     idleTimer = setTimeout(() => {
-      console.log("系統偵測到閒置超過 5 分鐘，啟動強制登出程序...");
+      console.log("系統偵測到閒置超過 10 分鐘，啟動強制登出程序...");
       localStorage.removeItem('sysUserData');
       localStorage.removeItem('sysYear');
       localStorage.removeItem('sysSemester');
@@ -945,7 +957,7 @@
       localStorage.removeItem('sysLastActive'); 
       
       // 【v3 定版】閒置逾時也改手動按鈕，不自動跳轉
-      showTerminalScreen("⏳ 閒置逾時，已自動登出", "您已閒置超過 5 分鐘，系統基於安全考量已將您登出。<br>請重新登入以繼續使用。", true);
+      showTerminalScreen("⏳ 閒置逾時，已自動登出", "您已閒置超過 10 分鐘，系統基於安全考量已將您登出。<br>請重新登入以繼續使用。", true);
     }, IDLE_TIMEOUT_MS);
   }
 
