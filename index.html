@@ -101,6 +101,7 @@
           <option value="第一次定期考">第一次定期考</option>
           <option value="第二次定期考">第二次定期考</option>
           <option value="第三次定期考">第三次定期考</option>
+          <option value="週考自然">週考國文</option>
           <option value="週考自然">週考自然</option>
           <option value="週考英語">週考英語</option>
           <option value="週考數學">週考數學</option>
@@ -175,6 +176,7 @@
             <option value="第一次定期考">第一次定期考</option>
             <option value="第二次定期考">第二次定期考</option>
             <option value="第三次定期考">第三次定期考</option>
+            <option value="週考自然">週考國文</option>
             <option value="週考自然">週考自然</option>
             <option value="週考英語">週考英語</option>
             <option value="週考數學">週考數學</option>
@@ -419,10 +421,26 @@
       allSubjectsDashOpt.textContent = `⭐ 導師全科分數與排名：${userData.homeroomClass} 班`;
       selectElement.appendChild(allSubjectsDashOpt);
     }
+
     if (userData.classes && userData.classes.length > 0) {
       let teacherSubjects = {};
 
+      // 💡 新增機制：自動擴充陣列，讓英語與英聽互相連動產生選單
+      let expandedClasses = [];
       userData.classes.forEach(clsTag => {
+        if (!expandedClasses.includes(clsTag)) expandedClasses.push(clsTag);
+        
+        if (clsTag.includes('_英語')) {
+          let listenTag = clsTag.replace('_英語', '_英聽');
+          if (!expandedClasses.includes(listenTag)) expandedClasses.push(listenTag);
+        } else if (clsTag.includes('_英聽')) {
+          let engTag = clsTag.replace('_英聽', '_英語');
+          if (!expandedClasses.includes(engTag)) expandedClasses.push(engTag);
+        }
+      });
+
+      // 💡 改用擴充後的 expandedClasses 來產生下拉選單
+      expandedClasses.forEach(clsTag => {
         if(clsTag === "ALL") return;
 
         if(clsTag.startsWith("DOMAIN_")) {
@@ -446,17 +464,28 @@
         }
       });
 
-      for (let sub in teacherSubjects) {
+for (let sub in teacherSubjects) {
         let classesJoin = teacherSubjects[sub].join(',');
+        
+        // 1. 原本的戰情總表
         const optTeacherDash = document.createElement('option');
         optTeacherDash.value = `TEACHER_OVERVIEW_${sub}|${classesJoin}`;
         optTeacherDash.textContent = `👩‍🏫 ${sub} — 任教班級戰情總表`;
         optTeacherDash.style.fontWeight = 'bold';
         optTeacherDash.style.color = '#16a085';
+
+        // 2. 新增：任教班級的分數與排名
+        const optTeacherRanks = document.createElement('option');
+        optTeacherRanks.value = `TEACHER_STUDENT_RANKS_${sub}|${classesJoin}`;
+        optTeacherRanks.textContent = `🧑‍🎓 ${sub} — 任教班級分數與排名`;
+        optTeacherRanks.style.fontWeight = 'bold';
+        optTeacherRanks.style.color = '#e67e22';
         
         if (selectElement.options.length > 0 && selectElement.options[0].value.startsWith('HOMEROOM_')) {
+          selectElement.insertBefore(optTeacherRanks, selectElement.options[1]);
           selectElement.insertBefore(optTeacherDash, selectElement.options[1]);
         } else {
+          selectElement.insertBefore(optTeacherRanks, selectElement.firstChild);
           selectElement.insertBefore(optTeacherDash, selectElement.firstChild);
         }
       }
