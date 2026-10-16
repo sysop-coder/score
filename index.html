@@ -502,7 +502,8 @@
       }
     }
 
-    if (userData.role === 'admin' || userData.role === 'executive') {
+    // 系統管理員已移除全校總表選項，僅保留高階主管 (校長/主任) 可觀看
+    if (userData.role === 'executive') {
       const optDash = document.createElement('option');
       optDash.value = "ALL_DASHBOARD";
       optDash.textContent = "🏢 觀看【全校學情戰情總表】";
