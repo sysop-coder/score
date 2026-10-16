@@ -421,7 +421,6 @@
     if (userData.role === 'admin') roleText = "系統管理員 👑";
     if (userData.role === 'executive') roleText = "高階主管 (校長/主任)";
     if (userData.role === 'assistant') roleText = "行政助理 💼";
-    if (userData.role === 'convener') roleText = `領域召集人 (${userData.convenerTitle})`;
     
     document.getElementById('userWelcomeName').innerText = userData.name;
     document.getElementById('userWelcomeRole').innerText = roleText;
@@ -465,15 +464,6 @@
 
       expandedClasses.forEach(clsTag => {
         if(clsTag === "ALL") return;
-
-        if(clsTag.startsWith("DOMAIN_")) {
-          const domain = clsTag.replace("DOMAIN_", "");
-          const optDash = document.createElement('option');
-          optDash.value = clsTag;
-          optDash.textContent = `🎯 觀看【${domain}領域】學情戰情總表`;
-          selectElement.appendChild(optDash);
-          return; 
-        }
 
         const [c, s] = clsTag.split('_');
         if (allowedSubjects.includes(s)) {
