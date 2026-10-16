@@ -192,6 +192,8 @@
 
     <div id="adminSecStep2" class="section">
       <h2>第二步：輸入扣分名單</h2>
+      
+      <!-- 單筆手動輸入列 -->
       <div class="row" style="display: flex; flex-wrap: nowrap; gap: 10px; align-items: center; overflow-x: auto; padding-bottom: 5px;">
         <input type="hidden" id="editRowIndex" value="">
         <div class="input-group" style="white-space: nowrap;">班級：<input type="number" id="dClass" placeholder="701" style="width: 65px; margin-right: 0;"/></div>
@@ -204,6 +206,9 @@
             <option value="數學">數學</option>
             <option value="自然">自然</option>
             <option value="社會">社會</option>
+            <option value="歷史">歷史</option>
+            <option value="地理">地理</option>
+            <option value="公民">公民</option>
             <option value="健教">健教</option>
             <option value="體育">體育</option>
           </select>
@@ -216,6 +221,20 @@
           <button class="btn-red" id="btnCancelEdit" onclick="cancelEdit()" style="display:none; margin: 0; white-space: nowrap; padding: 8px 15px;">取消編輯</button>
         </div>
       </div>
+
+      <!-- ✨ 新增：Excel / CSV 批次匯入扣分名單區塊 -->
+      <div class="row" style="background: #f8f9fa; padding: 12px 15px; border-radius: 6px; border: 1px dashed #cbd5e1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-top: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <span style="font-weight: bold; color: #2c3e50; font-size: 0.95rem;">📂 Excel 批次匯入：</span>
+          <input type="file" id="deductionExcelFile" accept=".xlsx, .xls, .csv" style="background: white;" />
+          <button class="btn-green" onclick="importDeductionExcel()" style="padding: 8px 15px; font-size: 0.95rem;">📥 匯入至下方列表</button>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-orange" onclick="downloadDeductionTemplate()" style="padding: 8px 12px; font-size: 0.9rem;">📄 下載匯入範本</button>
+          <button class="btn-red" onclick="clearDeductionList()" style="padding: 8px 12px; font-size: 0.9rem;">🗑️ 清空列表</button>
+        </div>
+      </div>
+
       <div id="deductionListArea">
         <table class="data-table">
           <thead><tr><th>班級</th><th>座號</th><th>科目</th><th>扣分</th><th>代碼</th><th>操作</th></tr></thead>
@@ -223,7 +242,7 @@
         </table>
       </div>
       <button class="btn-purple" id="btnBatchSave" onclick="batchSaveToBackend()">💾 將上方列表完整儲存至試算表</button>
-      <div class="warning-text">⚠️ 編輯完扣分名單後，請務必點擊上方按鈕儲存，報表才會生效！</div>
+      <div class="warning-text">⚠️ 編輯或匯入完扣分名單後，請務必點擊上方按鈕儲存，報表才會生效！</div>
     </div>
 
     <div id="adminSecStepFinal" class="section" style="border: 2px solid #27ae60;">
@@ -788,6 +807,134 @@
     localDeductions.splice(rowIdx, 1); renderDeductionTable();
   }
 
+// ✨ 新增：從 Excel / CSV 批次匯入扣分名單至前端列表
+  function importDeductionExcel() {
+    const fileInput = document.getElementById('deductionExcelFile');
+    if (!fileInput.files || fileInput.files.length === 0) {
+      showAlert('請先選擇要匯入的扣分名單 Excel 或 CSV 檔案！');
+      return;
+    }
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    const isCSV = file.name.toLowerCase().endsWith('.csv');
+
+    reader.onload = function(e) {
+      let workbook;
+      try {
+        if (isCSV) {
+          workbook = XLSX.read(e.target.result, { type: 'string' });
+        } else {
+          workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        }
+      } catch (error) {
+        showAlert('檔案解析失敗，請確認檔案格式是否為有效的 Excel 或 CSV。');
+        return;
+      }
+
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+
+      if (!jsonData || jsonData.length === 0) {
+        showAlert('檔案內沒有資料！');
+        return;
+      }
+
+      // 預設欄位順序：[0:班級, 1:座號, 2:科目, 3:扣分, 4:代碼]
+      let idxClass = 0, idxSeat = 1, idxSub = 2, idxPoints = 3, idxCode = 4;
+      let startRow = 0;
+
+      // 智慧判斷第一列是否為標題列
+      const firstRowStr = jsonData[0].map(cell => String(cell).trim());
+      if (firstRowStr.includes('班級') || firstRowStr.includes('座號') || firstRowStr.includes('科目')) {
+        startRow = 1;
+        idxClass = firstRowStr.indexOf('班級') !== -1 ? firstRowStr.indexOf('班級') : 0;
+        idxSeat = firstRowStr.indexOf('座號') !== -1 ? firstRowStr.indexOf('座號') : 1;
+        idxSub = firstRowStr.indexOf('科目') !== -1 ? firstRowStr.indexOf('科目') : (firstRowStr.indexOf('科目名稱') !== -1 ? firstRowStr.indexOf('科目名稱') : 2);
+        idxPoints = firstRowStr.indexOf('扣分') !== -1 ? firstRowStr.indexOf('扣分') : 3;
+        idxCode = firstRowStr.indexOf('代碼') !== -1 ? firstRowStr.indexOf('代碼') : (firstRowStr.indexOf('人工閱卷') !== -1 ? firstRowStr.indexOf('人工閱卷') : 4);
+      }
+
+      let addedCount = 0;
+      let updatedCount = 0;
+      let skippedCount = 0;
+
+      for (let i = startRow; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        if (!row || row.every(cell => String(cell).trim() === '')) continue; // 略過全空列
+
+        const c = String(row[idxClass] ?? '').trim();
+        const s = String(row[idxSeat] ?? '').trim();
+        const sub = String(row[idxSub] ?? '').trim();
+        const p = String(row[idxPoints] !== '' && row[idxPoints] !== undefined ? row[idxPoints] : '5').trim();
+        const code = String(row[idxCode] ?? '').trim();
+
+        // 防呆檢查：班級、座號、科目、扣分、代碼皆須具備
+        if (!c || !s || !sub || !p || !code) {
+          skippedCount++;
+          continue;
+        }
+
+        // 檢查列表中是否已存在相同「班級 + 座號 + 科目」的紀錄，若有則更新，若無則新增
+        const existingIndex = localDeductions.findIndex(item =>
+          String(item[0]).trim() === c &&
+          String(item[1]).trim() === s &&
+          String(item[2]).trim() === sub
+        );
+
+        if (existingIndex !== -1) {
+          localDeductions[existingIndex] = [c, s, sub, p, code];
+          updatedCount++;
+        } else {
+          localDeductions.push([c, s, sub, p, code]);
+          addedCount++;
+        }
+      }
+
+      renderDeductionTable();
+      fileInput.value = ''; // 清空檔案選擇器
+
+      let msg = `🎉 Excel 扣分名單匯入完成！\n✅ 新增：${addedCount} 筆\n🔄 更新覆蓋：${updatedCount} 筆`;
+      if (skippedCount > 0) {
+        msg += `\n⚠️ 略過欄位不完整資料：${skippedCount} 筆`;
+      }
+      msg += `\n\n💡 請確認列表無誤後，點擊下方「💾 將上方列表完整儲存至試算表」按鈕以套用扣分！`;
+      showAlert(msg);
+    };
+
+    if (isCSV) {
+      reader.readAsText(file, 'Big5');
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
+  }
+
+  // ✨ 新增：下載扣分名單 Excel 範本
+  function downloadDeductionTemplate() {
+    const templateData = [
+      ['班級', '座號', '科目', '扣分', '代碼'],
+      ['701', '1', '國文', '5', '1'],
+      ['702', '15', '數學', '5', '3']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '扣分名單範本');
+    XLSX.writeFile(wb, '扣分名單_匯入範本.xlsx');
+  }
+
+  // ✨ 新增：一鍵清空目前前端扣分列表
+  function clearDeductionList() {
+    if (localDeductions.length === 0) {
+      showAlert('目前列表已經是空的！');
+      return;
+    }
+    if (!confirm('確定要清空下方所有的扣分列表嗎？（清空後若未點擊儲存，不會影響雲端已扣分的資料）')) return;
+    localDeductions = [];
+    cancelEdit();
+    renderDeductionTable();
+  }
+
+  
   function batchSaveToBackend() {
     const btn = document.getElementById('btnBatchSave');
     const dataYear = document.getElementById('dataYear').value;
