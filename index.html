@@ -181,7 +181,6 @@
             <option value="週考英語">週考英語</option>
             <option value="週考數學">週考數學</option>
             <option value="週考體育">週考體育</option>
-            
           </select>
         </div>
       </div>
@@ -239,6 +238,15 @@
 <script>
   let localDeductions = [];
 
+  function escapeHtml(str) {
+    return String(str === undefined || str === null ? '' : str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function getCurrentAcademicTerm() {
     const now = new Date();
     const rocYear = now.getFullYear() - 1911;
@@ -286,8 +294,6 @@
   }
 
   window.onload = function() {
-    // 【修正】若已登出，setupDynamicMenus 仍需執行以顯示正確狀態，但避免在無憑證時打 API 造成誤判
-    // 先用本地時間渲染，登入後 verifySSOLogin 會再覆蓋
     const localUser = localStorage.getItem('sysUserData');
     const token = new URLSearchParams(window.location.search).get('token');
     if (!localUser && !token) {
@@ -346,14 +352,17 @@
       document.getElementById('dataSemester').value = savedSemester;
       
       renderDashboard(userData, savedYear, savedSemester);
+
+      // 🛡️ 僅當登入者為系統管理員或行政助理時，才向後端載入扣分名單
+      if (userData.role === 'admin' || userData.role === 'assistant') {
+        loadDeductionList();
+      }
     } else {
       document.getElementById('sysYear').value = currentYear;
       document.getElementById('sysSemester').value = currentTerm.semester;
       document.getElementById('dataYear').value = currentYear;
       document.getElementById('dataSemester').value = currentTerm.semester;
     }
-    
-    loadDeductionList();
   }
 
   function fallbackAcademicTerm() {
@@ -409,13 +418,11 @@
       opt.textContent = `⭐ 導師班級：${userData.homeroomClass} (觀看全班成績單)`;
       selectElement.appendChild(opt);
 
-      // 變更：改為單一「班級單科報表看板」選項，點入後再由後端動態產生有成績的按鈕
       const singleDashOpt = document.createElement('option');
       singleDashOpt.value = `HOMEROOM_SUBJECTS_${userData.homeroomClass}`;
       singleDashOpt.textContent = `⭐ 導師單科報表看板：${userData.homeroomClass} 班`;
       selectElement.appendChild(singleDashOpt);
 
-      // 👇 這是這次新增的：全科報表看板選項
       const allSubjectsDashOpt = document.createElement('option');
       allSubjectsDashOpt.value = `HOMEROOM_ALL_SUBJECTS_${userData.homeroomClass}`;
       allSubjectsDashOpt.textContent = `⭐ 導師全科分數與排名：${userData.homeroomClass} 班`;
@@ -424,8 +431,6 @@
 
     if (userData.classes && userData.classes.length > 0) {
       let teacherSubjects = {};
-
-      // 💡 新增機制：自動擴充陣列，讓英語與英聽互相連動產生選單
       let expandedClasses = [];
       userData.classes.forEach(clsTag => {
         if (!expandedClasses.includes(clsTag)) expandedClasses.push(clsTag);
@@ -439,7 +444,6 @@
         }
       });
 
-      // 💡 改用擴充後的 expandedClasses 來產生下拉選單
       expandedClasses.forEach(clsTag => {
         if(clsTag === "ALL") return;
 
@@ -464,17 +468,15 @@
         }
       });
 
-for (let sub in teacherSubjects) {
+      for (let sub in teacherSubjects) {
         let classesJoin = teacherSubjects[sub].join(',');
         
-        // 1. 原本的戰情總表
         const optTeacherDash = document.createElement('option');
         optTeacherDash.value = `TEACHER_OVERVIEW_${sub}|${classesJoin}`;
         optTeacherDash.textContent = `👩‍🏫 ${sub} — 任教班級戰情總表`;
         optTeacherDash.style.fontWeight = 'bold';
         optTeacherDash.style.color = '#16a085';
 
-        // 2. 新增：任教班級的分數與排名
         const optTeacherRanks = document.createElement('option');
         optTeacherRanks.value = `TEACHER_STUDENT_RANKS_${sub}|${classesJoin}`;
         optTeacherRanks.textContent = `🧑‍🎓 ${sub} — 任教班級分數與排名`;
@@ -521,15 +523,13 @@ for (let sub in teacherSubjects) {
     }
   }
 
-      function handleLogout() {
+  function handleLogout() {
     try { clearTimeout(idleTimer); } catch(e) {}
-    // 【安全性修補 v3】移除閒置監聽器，防止登出畫面還在背景觸發 resetIdleTimer
     try {
       ['mousemove','keydown','scroll','click','touchstart'].forEach(evt => {
         document.removeEventListener(evt, resetIdleTimer);
       });
     } catch(e) {}
-    // 嘗試通知後端刪除 Session
     try {
       const sid = localStorage.getItem('sysSessionId');
       if (sid) {
@@ -628,7 +628,7 @@ for (let sub in teacherSubjects) {
             });
           }
         } else {
-          pool.innerHTML = `<div style="text-align:center; padding: 40px 0;"><h3 style="color:#e74c3c;">❌ 查詢失敗</h3><p style="color:#555;">${res.message}</p></div>`;
+          pool.innerHTML = `<div style="text-align:center; padding: 40px 0;"><h3 style="color:#e74c3c;">❌ 查詢失敗</h3><p style="color:#555;">${escapeHtml(res.message)}</p></div>`;
         }
       })
       .withFailureHandler(err => {
@@ -638,7 +638,7 @@ for (let sub in teacherSubjects) {
           queryBtn.style.cursor = 'pointer';
           queryBtn.innerText = '立即查詢';
         }
-        pool.innerHTML = `<div style="text-align:center; padding: 40px 0;"><h3 style="color:#e74c3c;">❌ 系統連線異常</h3><p>${err}</p></div>`;
+        pool.innerHTML = `<div style="text-align:center; padding: 40px 0;"><h3 style="color:#e74c3c;">❌ 系統連線異常</h3><p>${escapeHtml(err)}</p></div>`;
       })
       .generateLiveReportHtml(sysYear, sysSemester, examType, clsSub);
   }
@@ -723,9 +723,7 @@ for (let sub in teacherSubjects) {
         renderDeductionTable();
       })
       .withFailureHandler(err => {
-        // 捕獲錯誤並顯示給管理員
         showAlert('讀取扣分名單失敗：' + err);
-        // 將卡住的「讀取中...」替換為錯誤提示
         document.getElementById('deductionTableBody').innerHTML = '<tr><td colspan="6" style="color: #e74c3c; font-weight: bold;">❌ 資料讀取失敗，請重新整理頁面</td></tr>';
       })
       .getDeductionList();
@@ -736,8 +734,8 @@ for (let sub in teacherSubjects) {
     if (localDeductions.length === 0) { tbody.innerHTML = '<tr><td colspan="6">目前無扣分資料</td></tr>'; return; }
     let html = '';
     localDeductions.forEach((row, i) => {
-      html += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td><td>${row[3]}</td><td>${row[4]}</td><td>
-          <button class="btn-orange" onclick="startEdit(${i}, '${row[0]}', '${row[1]}', '${row[2]}', '${row[3]}', '${row[4]}')">編輯</button>
+      html += `<tr><td>${escapeHtml(row[0])}</td><td>${escapeHtml(row[1])}</td><td>${escapeHtml(row[2])}</td><td>${escapeHtml(row[3])}</td><td>${escapeHtml(row[4])}</td><td>
+          <button class="btn-orange" onclick="startEdit(${i})">編輯</button>
           <button class="btn-red" onclick="deleteLocalItem(${i})">刪除</button></td></tr>`;
     });
     tbody.innerHTML = html;
@@ -754,7 +752,7 @@ for (let sub in teacherSubjects) {
     if (!c || !s || !sub || !p || !code) { showAlert('所有欄位皆請填寫完整'); return; }
     
     if (editIdx !== "") {
-      localDeductions[parseInt(editIdx)] = [c, s, sub, p, code];
+      localDeductions[parseInt(editIdx, 10)] = [c, s, sub, p, code];
       cancelEdit();
     } else {
       localDeductions.push([c, s, sub, p, code]);
@@ -764,10 +762,15 @@ for (let sub in teacherSubjects) {
     renderDeductionTable();
   }
 
-  function startEdit(rowIdx, c, s, sub, p, code) {
+  function startEdit(rowIdx) {
+    const row = localDeductions[rowIdx];
+    if (!row) return;
     document.getElementById('editRowIndex').value = rowIdx;
-    document.getElementById('dClass').value = c; document.getElementById('dSeat').value = s;
-    document.getElementById('dSubject').value = sub; document.getElementById('dPoints').value = p; document.getElementById('dCode').value = code;
+    document.getElementById('dClass').value = row[0];
+    document.getElementById('dSeat').value = row[1];
+    document.getElementById('dSubject').value = row[2];
+    document.getElementById('dPoints').value = row[3];
+    document.getElementById('dCode').value = row[4];
     document.getElementById('btnSaveDeduction').innerText = '儲存修改';
     document.getElementById('btnCancelEdit').style.display = 'inline-block';
   }
@@ -802,7 +805,7 @@ for (let sub in teacherSubjects) {
       .batchSaveDeductions(dataYear, dataSemester, dataExamType, localDeductions);
   }
 
- function exportExcel() {
+  function exportExcel() {
     const btnExport = document.getElementById('btnExportExcel');
     const dataYear = document.getElementById('dataYear').value;
     const dataSemester = document.getElementById('dataSemester').value;
@@ -832,9 +835,7 @@ for (let sub in teacherSubjects) {
       .getRawSheetData(dataYear, dataSemester, dataExamType); 
   }
 
-
-
-// =====================================================================
+  // =====================================================================
   // 🛑 終端安全畫面 - v3 手動導向版
   // =====================================================================
   function showTerminalScreen(title, message, showReloginBtn) {
@@ -852,14 +853,13 @@ for (let sub in teacherSubjects) {
     `;
   }
 
-// =====================================================================
+  // =====================================================================
   // 🛡️ 系統全域常數設定 (GitHub Pages 專用)
   // =====================================================================
   
-  // 1. 從網址列取得 Token
   const urlParams = new URLSearchParams(window.location.search);
   const ssoToken = urlParams.get('token') || "";
-  const CURRENT_APP_URL = "https://sysop-coder.github.io/score/"; // 固定入口，避免帶 _logout 或 token 回去
+  const CURRENT_APP_URL = "https://sysop-coder.github.io/score/";
 
   // ⚠️ 部署必填區：
   const SSO_CENTER_URL = "https://sysop-coder.github.io/sso/"; 
@@ -882,7 +882,6 @@ for (let sub in teacherSubjects) {
             const failureCb = target._onFailure;
             target._onSuccess = null; target._onFailure = null;
 
-            // 【安全性修補】每次請求都帶上 sessionId
             const sessionId = localStorage.getItem('sysSessionId') || "";
             const securePayload = { ...payload, sessionId: sessionId };
             fetch(GAS_API_URL, {
@@ -902,13 +901,11 @@ for (let sub in teacherSubjects) {
     }
   };
 
-  // 3. 網頁一載入，立刻啟動攔截檢查
   document.addEventListener("DOMContentLoaded", function() {
     checkSSOStatus();
   });
 
   function checkSSOStatus() {
-    // 若是登出剛回來，網址會有 _logout 或 _relogin，仍然要導向 SSO 登入頁
     const _url = new URL(window.location.href);
     if (_url.searchParams.has('_logout')) {
       console.log("偵測到登出回跳，準備導向登入頁");
@@ -925,7 +922,6 @@ for (let sub in teacherSubjects) {
         localStorage.removeItem('sysExamType');
         localStorage.removeItem('sysSessionId');
         localStorage.removeItem('sysLastActive');
-        // 【修正】離線逾時不再跳轉到 script.google.com，直接顯示終端畫面，避免 拒絕連線
         showTerminalScreen("⏳ 閒置逾時，已自動登出", "您已離線閒置超過 10 分鐘，系統已將您登出。<br>請重新登入以繼續使用。", true);
         return;
       }
@@ -963,7 +959,6 @@ for (let sub in teacherSubjects) {
         .verifySSOLogin(currentTerm.year, currentTerm.semester, ssoToken);
 
     } else {
-      // 【修正】使用 replace + encode，避免歷史紀錄堆疊與 X-Frame-Options 阻擋
       window.location.replace(SSO_CENTER_URL + "?redirect=" + encodeURIComponent(CURRENT_APP_URL));
     }
   }
@@ -985,7 +980,6 @@ for (let sub in teacherSubjects) {
       localStorage.removeItem('sysSessionId');
       localStorage.removeItem('sysLastActive'); 
       
-      // 【v3 定版】閒置逾時也改手動按鈕，不自動跳轉
       showTerminalScreen("⏳ 閒置逾時，已自動登出", "您已閒置超過 10 分鐘，系統基於安全考量已將您登出。<br>請重新登入以繼續使用。", true);
     }, IDLE_TIMEOUT_MS);
   }
@@ -1001,7 +995,6 @@ for (let sub in teacherSubjects) {
   window.addEventListener('storage', function(e) {
     if (e.key === 'sysUserData' && !e.newValue) {
       console.log("🔒 偵測到其他分頁已登出，同步封鎖本分頁...");
-      // ✅ 跨分頁登出直接顯示畫面，不再跳轉
       showTerminalScreen("🔒 同步登出完成", "系統偵測到您已在其他分頁執行登出，本分頁已同步關閉存取權限。<br>請關閉此分頁。");
     }
   });
