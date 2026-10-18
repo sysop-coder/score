@@ -222,7 +222,7 @@
         </div>
       </div>
 
-      <!-- ✨ 新增：Excel / CSV 批次匯入扣分名單區塊 -->
+      <!-- ✨ Excel / CSV 批次匯入扣分名單區塊 -->
       <div class="row" style="background: #f8f9fa; padding: 12px 15px; border-radius: 6px; border: 1px dashed #cbd5e1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-top: 10px;">
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
           <span style="font-weight: bold; color: #2c3e50; font-size: 0.95rem;">📂 Excel 批次匯入：</span>
@@ -553,7 +553,7 @@
     localStorage.removeItem('sysExamType');
     localStorage.removeItem('sysLastActive'); 
     
-    showTerminalScreen("✅ 您已安全登出", "您已超逾10分鐘未使用，系統已自動為您登出。<br>為確保資訊安全，請重新登入或關閉此分頁。", true);
+    showTerminalScreen("✅ 您已安全登出", "您已成功登出教師查詢讀卡成績系統。<br>為確保資訊安全，請重新登入或關閉此分頁。", true);
   }
 
   function fetchLiveReport() {
@@ -798,7 +798,7 @@
     localDeductions.splice(rowIdx, 1); renderDeductionTable();
   }
 
-// ✨ 新增：從 Excel / CSV 批次匯入扣分名單至前端列表
+  // ✨ 從 Excel / CSV 批次匯入扣分名單至前端列表
   function importDeductionExcel() {
     const fileInput = document.getElementById('deductionExcelFile');
     if (!fileInput.files || fileInput.files.length === 0) {
@@ -900,7 +900,7 @@
     }
   }
 
-  // ✨ 新增：下載扣分名單 Excel 範本
+  // ✨ 下載扣分名單 Excel 範本
   function downloadDeductionTemplate() {
     const templateData = [
       ['班級', '座號', '科目', '扣分', '代碼'],
@@ -913,7 +913,7 @@
     XLSX.writeFile(wb, '扣分名單_匯入範本.xlsx');
   }
 
-  // ✨ 新增：一鍵清空目前前端扣分列表
+  // ✨ 一鍵清空目前前端扣分列表
   function clearDeductionList() {
     if (localDeductions.length === 0) {
       showAlert('目前列表已經是空的！');
@@ -925,12 +925,13 @@
     renderDeductionTable();
   }
 
-  
   function batchSaveToBackend() {
     const btn = document.getElementById('btnBatchSave');
     const dataYear = document.getElementById('dataYear').value;
     const dataSemester = document.getElementById('dataSemester').value;
     const dataExamType = document.getElementById('dataExamType').value;
+
+    if (!dataExamType) { showAlert('⚠️ 系統安全防護：請先於第一步確認並選擇「考試種類」，再儲存扣分名單！'); return; }
 
     btn.disabled = true; btn.innerText = '儲存中...';
     google.script.run
@@ -967,6 +968,7 @@
         setTimeout(() => { document.getElementById('progressContainer').style.display = 'none'; }, 2000);
       })
       .withFailureHandler(err => {
+        updateProgress(0);
         btnExport.disabled = false; btnExport.innerText = '匯出扣分後成績 (Excel)';
         showAlert('匯出失敗：' + err);
       })
