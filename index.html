@@ -1138,6 +1138,155 @@
       showTerminalScreen("🔒 同步登出完成", "系統偵測到您已在其他分頁執行登出，本分頁已同步關閉存取權限。<br>請關閉此分頁。");
     }
   });
+
+  // =====================================================================
+  // 📊 Excel 雙合一匯出核心模組 (SheetJS)
+  // =====================================================================
+
+  /**
+   * 🧑‍🎓 科任老師：匯出任教班級分數與排名（總表 + 各班獨立分頁）
+   */
+  function exportTeacherRanksExcel(subject) {
+    const table = document.getElementById('table-teacher-ranks');
+    if (!table) { alert('找不到可匯出的表格資料！'); return; }
+
+    const curExam = document.getElementById('viewExamType').value;
+    const curYear = document.getElementById('viewYear').value;
+    const curSem = document.getElementById('viewSemester').value;
+
+    const wb = XLSX.utils.book_new();
+
+    // 1. 產生第一頁：橫向併排總表
+    const clonedTable = table.cloneNode(true);
+    // 清除排名獎牌與雜訊符號，確保數值純淨
+    clonedTable.querySelectorAll('td').forEach(td => {
+      let t = td.innerText.trim();
+      t = t.replace(/[🥇🥈🥉]/g, '').trim();
+      td.innerText = t;
+    });
+    const wsSummary = XLSX.utils.table_to_sheet(clonedTable);
+    XLSX.utils.book_append_sheet(wb, wsSummary, '任教班級總表');
+
+    // 2. 依班級建立個別獨立分頁 (5 欄結構)
+    const headerRow1 = table.querySelectorAll('thead tr:first-child th');
+    const classNames = [];
+    headerRow1.forEach(th => {
+      let cName = th.innerText.replace('班', '').trim();
+      if (cName) classNames.push(cName);
+    });
+
+    const bodyRows = table.querySelectorAll('tbody tr');
+    classNames.forEach((cls, clsIdx) => {
+      const classRows = [['座號', '姓名', '分數', '排名', '備註']];
+      const startCol = clsIdx * 5;
+
+      bodyRows.forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        if (tds.length >= startCol + 5) {
+          const seat = tds[startCol].innerText.trim();
+          const name = tds[startCol + 1].innerText.trim();
+          const score = tds[startCol + 2].innerText.trim();
+          let rank = tds[startCol + 3].innerText.trim().replace(/[🥇🥈🥉]/g, '').trim();
+          const remark = tds[startCol + 4].innerText.trim();
+
+          if (seat && name) {
+            classRows.push([
+              isNaN(Number(seat)) ? seat : Number(seat),
+              name,
+              score !== '' && !isNaN(Number(score)) ? Number(score) : score,
+              rank !== '' && !isNaN(Number(rank)) ? Number(rank) : rank,
+              remark
+            ]);
+          }
+        }
+      });
+
+      if (classRows.length > 1) {
+        const wsClass = XLSX.utils.aoa_to_sheet(classRows);
+        XLSX.utils.book_append_sheet(wb, wsClass, `${cls}班`);
+      }
+    });
+
+    const fileName = `${curYear}-${curSem}_${curExam}_${subject}_任教班級分數與排名.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  }
+
+  /**
+   * ⭐ 導師：匯出全科分數與排名（全科總表 + 各科獨立分頁）
+   */
+  function exportHomeroomExcel(targetClass) {
+    const table = document.getElementById(`table-${targetClass}`);
+    if (!table) { alert('找不到可匯出的表格資料！'); return; }
+
+    const curExam = document.getElementById('viewExamType').value;
+    const curYear = document.getElementById('viewYear').value;
+    const curSem = document.getElementById('viewSemester').value;
+
+    const wb = XLSX.utils.book_new();
+
+    // 1. 產生第一頁：全科分數與排名總表
+    const clonedTable = table.cloneNode(true);
+    clonedTable.querySelectorAll('td').forEach(td => {
+      let scoreVal = td.getAttribute('data-score');
+      let rankVal = td.getAttribute('data-rank');
+      if (scoreVal !== null) {
+        td.innerText = scoreVal; // 還原為純分數，不帶 ⚠️
+      } else if (rankVal !== null) {
+        td.innerText = rankVal; // 還原為純排名，不帶獎牌
+      } else {
+        td.innerText = td.innerText.replace(/[🥇🥈🥉⚠️]/g, '').trim();
+      }
+    });
+    const wsSummary = XLSX.utils.table_to_sheet(clonedTable);
+    XLSX.utils.book_append_sheet(wb, wsSummary, '全科總表');
+
+    // 2. 依學科建立獨立分頁 (各科 5 欄結構：座號、姓名、分數、名次、備註)
+    const subThs = table.querySelectorAll('thead tr:first-child th:not([rowspan])');
+    const subjects = [];
+    subThs.forEach(th => {
+      const s = th.innerText.trim();
+      if (s) subjects.push(s);
+    });
+
+    const bodyRows = table.querySelectorAll('tbody tr');
+    subjects.forEach((sub, subIdx) => {
+      const subRows = [['座號', '姓名', '分數', '名次', '備註']];
+      const scoreColIdx = 2 + (subIdx * 2);
+      const rankColIdx = scoreColIdx + 1;
+
+      bodyRows.forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        if (tds.length > rankColIdx) {
+          const seat = tds[0].innerText.trim();
+          const name = tds[1].innerText.trim();
+          const scoreTd = tds[scoreColIdx];
+          const rankTd = tds[rankColIdx];
+
+          const score = scoreTd.getAttribute('data-score') || scoreTd.innerText.replace(/[⚠️—]/g, '').trim();
+          const rank = rankTd.getAttribute('data-rank') || rankTd.innerText.replace(/[🥇🥈🥉—]/g, '').trim();
+          const remark = scoreTd.getAttribute('data-remark') || '';
+
+          if (score !== '' && score !== '—') {
+            subRows.push([
+              isNaN(Number(seat)) ? seat : Number(seat),
+              name,
+              isNaN(Number(score)) ? score : Number(score),
+              isNaN(Number(rank)) ? rank : Number(rank),
+              remark
+            ]);
+          }
+        }
+      });
+
+      if (subRows.length > 1) {
+        const wsSub = XLSX.utils.aoa_to_sheet(subRows);
+        XLSX.utils.book_append_sheet(wb, wsSub, sub);
+      }
+    });
+
+    const fileName = `${curYear}-${curSem}_${curExam}_${targetClass}班_全科分數與排名.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  }
 </script>
 </body>
 </html>
