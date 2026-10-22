@@ -251,6 +251,39 @@
         <button class="btn-orange" id="btnExportExcel" onclick="exportExcel()" style="flex: 1; width: 100%;">匯出扣分後成績 (Excel)</button>
       </div>
     </div>
+
+    <div id="adminSecSchoolRank" class="section" style="border: 2px solid #d35400; background-color: #fffaf5;">
+      <h2 style="color: #d35400; background: #fffaf5;">🏆 匯入定期考學校排名 (Excel) 並發布至 Firebase</h2>
+      <div class="row" style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+        <div>
+          <span style="font-weight:bold;">學年度：</span>
+          <select id="rankYear" style="width: 140px;"></select>
+        </div>
+        <div>
+          <span style="font-weight:bold;">學期：</span>
+          <select id="rankSemester" style="width: 120px;">
+            <option value="1">第 1 學期</option>
+            <option value="2">第 2 學期</option>
+          </select>
+        </div>
+        <div>
+          <span style="font-weight:bold;">考試種類：</span>
+          <select id="rankExamType" style="width: 180px;">
+            <option value="第一次定期考">第一次定期考</option>
+            <option value="第二次定期考">第二次定期考</option>
+            <option value="第三次定期考">第三次定期考</option>
+            <option value="暑期評量">暑期評量</option>
+          </select>
+        </div>
+      </div>
+      <p style="font-size: 0.9rem; color: #666; margin: 6px 0 12px 0;">
+        💡 支援直接匯入教務處產出之排名檔（如 <code>1st.xlsx</code>），系統將自動把「七年一班～二十二班」轉碼為 3 碼班級（<code>701~722</code>），支援跨年級分批匯入合併，並即時編譯發布至 Firebase 供導師查詢。
+      </p>
+      <div class="row" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <input type="file" id="schoolRankExcelFile" accept=".xlsx, .xls, .csv" style="background: white;" />
+        <button class="btn-green" id="btnUploadSchoolRank" onclick="uploadSchoolRankExcel()" style="background-color: #d35400; padding: 10px 20px;">🚀 解析學校排名並發布至 Firebase</button>
+      </div>
+    </div>
   </div> 
 </div>
 
@@ -334,10 +367,12 @@
     const sysYearSelect = document.getElementById('sysYear');
     const dataYearSelect = document.getElementById('dataYear');
     const viewYearSelect = document.getElementById('viewYear');
+    const rankYearSelect = document.getElementById('rankYear');
     
     sysYearSelect.innerHTML = '';
     dataYearSelect.innerHTML = '';
     viewYearSelect.innerHTML = '';
+    if (rankYearSelect) rankYearSelect.innerHTML = '';
 
     const SYSTEM_LAUNCH_YEAR = 115; 
     
@@ -349,6 +384,7 @@
       sysYearSelect.insertAdjacentHTML('beforeend', optionHtml);
       dataYearSelect.insertAdjacentHTML('beforeend', optionHtml);
       viewYearSelect.insertAdjacentHTML('beforeend', optionHtml);
+      if (rankYearSelect) rankYearSelect.insertAdjacentHTML('beforeend', optionHtml);
     }
 
     const savedUser = localStorage.getItem('sysUserData');
@@ -361,19 +397,25 @@
         document.getElementById('sysYear').value = savedYear;
         document.getElementById('dataYear').value = savedYear;
         document.getElementById('viewYear').value = savedYear;
+        if (rankYearSelect) rankYearSelect.value = savedYear;
       } else {
         document.getElementById('sysYear').value = currentYear;
         document.getElementById('dataYear').value = currentYear;
         document.getElementById('viewYear').value = currentYear;
+        if (rankYearSelect) rankYearSelect.value = currentYear;
       }
 
       document.getElementById('sysSemester').value = savedSemester;
       document.getElementById('dataSemester').value = savedSemester;
+      if (document.getElementById('rankSemester')) document.getElementById('rankSemester').value = savedSemester;
+      if (document.getElementById('rankExamType') && currentTerm.examType) {
+        document.getElementById('rankExamType').value = currentTerm.examType;
+      }
       
       renderDashboard(userData, savedYear, savedSemester);
 
-      // 🛡️ 僅當登入者為系統管理員或行政助理時，才向後端載入扣分名單
-      if (userData.role === 'admin' || userData.role === 'assistant') {
+      // 🛡️ 僅當登入者為系統管理員、專案承辦或行政助理時，才向後端載入扣分名單
+      if (['admin', 'manager', 'assistant'].includes(userData.role)) {
         loadDeductionList();
       }
     } else {
@@ -381,6 +423,8 @@
       document.getElementById('sysSemester').value = currentTerm.semester;
       document.getElementById('dataYear').value = currentYear;
       document.getElementById('dataSemester').value = currentTerm.semester;
+      if (rankYearSelect) rankYearSelect.value = currentYear;
+      if (document.getElementById('rankSemester')) document.getElementById('rankSemester').value = currentTerm.semester;
     }
   }
 
@@ -419,6 +463,7 @@
     let roleText = "一般任課教師";
     if (userData.role === 'homeroom') roleText = `導師 (導師班級：${userData.homeroomClass})`;
     if (userData.role === 'admin') roleText = "系統管理員 👑";
+    if (userData.role === 'manager') roleText = "專案承辦 🛠️";
     if (userData.role === 'executive') roleText = "高階主管 (校長/主任)";
     if (userData.role === 'assistant') roleText = "行政助理 💼";
     
@@ -445,6 +490,13 @@
       allSubjectsDashOpt.value = `HOMEROOM_ALL_SUBJECTS_${userData.homeroomClass}`;
       allSubjectsDashOpt.textContent = `⭐ 導師全科分數與排名：${userData.homeroomClass} 班`;
       selectElement.appendChild(allSubjectsDashOpt);
+
+      const schoolRankOpt = document.createElement('option');
+      schoolRankOpt.value = `HOMEROOM_SCHOOL_RANK_${userData.homeroomClass}`;
+      schoolRankOpt.textContent = `🏆 導師班級學校排名：${userData.homeroomClass} 班`;
+      schoolRankOpt.style.fontWeight = 'bold';
+      schoolRankOpt.style.color = '#d35400';
+      selectElement.appendChild(schoolRankOpt);
     }
 
     if (userData.classes && userData.classes.length > 0) {
@@ -524,7 +576,7 @@
       
       if(document.getElementById('assistantHeader')) document.getElementById('assistantHeader').style.display = 'none';
 
-      if (userData.role === 'admin') {
+      if (userData.role === 'admin' || userData.role === 'manager') {
         document.getElementById('adminPanel').style.display = 'block';
         document.getElementById('adminSecStep0').style.display = 'block';
       } else {
@@ -1090,6 +1142,231 @@
         showAlert('儲存失敗：' + err); btn.disabled = false; btn.innerText = '💾 將上方列表完整儲存至試算表';
       })
       .batchSaveDeductions(dataYear, dataSemester, dataExamType, localDeductions);
+  }
+
+  // =====================================================================
+  // 🏆 定期考學校排名：前端中文班級轉碼、匯入上傳、排序切換與 Excel/PDF 匯出
+  // =====================================================================
+
+  function convertChineseNumber(str) {
+    if (/^\d+$/.test(str)) return parseInt(str, 10);
+    const map = { '零': 0, '〇': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+    if (str === '十') return 10;
+    if (str.includes('十')) {
+      const parts = str.split('十');
+      const tens = parts[0] === '' ? 1 : (map[parts[0]] || parseInt(parts[0], 10) || 1);
+      const units = parts[1] === '' ? 0 : (map[parts[1]] || parseInt(parts[1], 10) || 0);
+      return tens * 10 + units;
+    }
+    let res = 0;
+    for (let i = 0; i < str.length; i++) {
+      if (map[str[i]] !== undefined) res = res * 10 + map[str[i]];
+    }
+    return res;
+  }
+
+  function normalizeClassNameClient(rawClass) {
+    if (rawClass === undefined || rawClass === null) return "";
+    let s = String(rawClass).trim().replace(/\s+/g, "");
+    if (!s) return "";
+    if (/^\d{3,4}$/.test(s)) return s;
+    const gradeMap = { '七': '7', '八': '8', '九': '9', '7': '7', '8': '8', '9': '9', '一': '1', '二': '2', '三': '3' };
+    const m = s.match(/^([七八九789一二三])年?級?第?([一二三四五六七八九十0-9]+)班?$/);
+    if (m) {
+      const g = gradeMap[m[1]] || m[1];
+      const cNum = convertChineseNumber(m[2]);
+      if (cNum > 0) return String(g) + String(cNum).padStart(2, '0');
+    }
+    return s;
+  }
+
+  function uploadSchoolRankExcel() {
+    const fileInput = document.getElementById('schoolRankExcelFile');
+    const rankYear = document.getElementById('rankYear').value;
+    const rankSemester = document.getElementById('rankSemester').value;
+    const rankExamType = document.getElementById('rankExamType').value;
+
+    if (!rankExamType) {
+      showAlert('⚠️ 請先選擇「考試種類」，再進行排名檔匯入！');
+      return;
+    }
+    if (!fileInput.files || fileInput.files.length === 0) {
+      showAlert('請先選擇要匯入的定期考學校排名 Excel 檔案（如 1st.xlsx）！');
+      return;
+    }
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    const isCSV = file.name.toLowerCase().endsWith('.csv');
+
+    updateProgress(15);
+    reader.onload = function(e) {
+      let workbook;
+      try {
+        if (isCSV) {
+          workbook = XLSX.read(e.target.result, { type: 'string' });
+        } else {
+          workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        }
+      } catch (err) {
+        updateProgress(0);
+        showAlert('檔案解析失敗，請確認是否為有效的 Excel 或 CSV 檔案。');
+        return;
+      }
+
+      // 自動尋找第一個非空白的工作表 (防範空白 Worksheet 分頁)
+      let targetJson = null;
+      for (let sName of workbook.SheetNames) {
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sName], { header: 1, defval: '' });
+        if (rows && rows.length >= 2) {
+          targetJson = rows;
+          break;
+        }
+      }
+
+      if (!targetJson || targetJson.length < 2) {
+        updateProgress(0);
+        showAlert('❌ 在檔案中找不到有效的排名資料列！');
+        return;
+      }
+
+      updateProgress(45);
+      const headers = targetJson[0].map(h => String(h).trim());
+      const idxRank = headers.indexOf('排名') !== -1 ? headers.indexOf('排名') : headers.indexOf('校排');
+      const idxClass = headers.indexOf('班級');
+      const idxSeat = headers.indexOf('座號');
+      const idxName = headers.indexOf('姓名');
+      const idxTotal = headers.indexOf('總分');
+
+      if (idxRank === -1 || idxClass === -1 || idxSeat === -1 || idxName === -1 || idxTotal === -1) {
+        updateProgress(0);
+        showAlert('❌ 欄位檢查未通過！\nExcel 第一列必須包含：「排名、班級、座號、姓名、總分」等欄位。\n目前偵測到的欄位：' + headers.join('、'));
+        return;
+      }
+
+      let processedRows = [headers];
+      for (let i = 1; i < targetJson.length; i++) {
+        const row = targetJson[i];
+        if (!row || row.every(c => String(c).trim() === '')) continue;
+        let cloned = [...row];
+        cloned[idxClass] = normalizeClassNameClient(row[idxClass]);
+        processedRows.push(cloned);
+      }
+
+      updateProgress(65);
+      google.script.run
+        .withSuccessHandler(res => {
+          updateProgress(100);
+          showAlert(res);
+          setTimeout(() => { document.getElementById('progressContainer').style.display = 'none'; }, 1800);
+          fileInput.value = '';
+        })
+        .withFailureHandler(err => {
+          updateProgress(0);
+          showAlert('匯入學校排名失敗：' + err);
+        })
+        .saveSchoolRankData(rankYear, rankSemester, rankExamType, processedRows);
+    };
+
+    if (isCSV) {
+      reader.readAsText(file, 'Big5');
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
+  }
+
+  /**
+   * 🔢 導師端：一鍵切換「依座號排序」或「依學校排名排序」
+   */
+  function sortHomeroomSchoolRankTable(targetClass, sortBy) {
+    const table = document.getElementById(`table-school-rank-${targetClass}`);
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    rows.sort((a, b) => {
+      if (sortBy === 'rank') {
+        const rA = Number(a.getAttribute('data-school-rank')) || 99999;
+        const rB = Number(b.getAttribute('data-school-rank')) || 99999;
+        if (rA !== rB) return rA - rB;
+      }
+      const sA = Number(a.getAttribute('data-seat')) || 0;
+      const sB = Number(b.getAttribute('data-seat')) || 0;
+      return sA - sB;
+    });
+
+    rows.forEach((tr, idx) => {
+      const rowBg = (idx % 2 === 1) ? '#f8fafc' : '#ffffff';
+      tr.style.background = rowBg;
+      tr.setAttribute('onmouseout', `this.style.background='${rowBg}'`);
+      tbody.appendChild(tr);
+    });
+  }
+
+  /**
+   * 📊 導師端：匯出班級學校排名 Excel (.xlsx)
+   */
+  function exportHomeroomSchoolRankExcel(targetClass) {
+    const table = document.getElementById(`table-school-rank-${targetClass}`);
+    if (!table) {
+      showAlert('找不到可匯出的學校排名表格！');
+      return;
+    }
+
+    const curExam = document.getElementById('viewExamType').value;
+    const curYear = document.getElementById('viewYear').value;
+    const curSem = document.getElementById('viewSemester').value;
+
+    const ths = Array.from(table.querySelectorAll('thead th')).map(th => th.innerText.replace(/\s+/g, ' ').trim());
+    const aoa = [ths];
+
+    const trs = table.querySelectorAll('tbody tr');
+    trs.forEach(tr => {
+      const rowVals = [];
+      tr.querySelectorAll('td').forEach(td => {
+        const raw = td.getAttribute('data-export') !== null ? td.getAttribute('data-export') : td.innerText.replace(/[🥇🥈🥉★]/g, '').trim();
+        const num = Number(raw);
+        rowVals.push((raw !== '' && raw !== '—' && !isNaN(num)) ? num : raw);
+      });
+      aoa.push(rowVals);
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, `${targetClass}班_學校排名`);
+    XLSX.writeFile(wb, `${curYear}-${curSem}_${curExam}_${targetClass}班_學校排名總表.xlsx`);
+  }
+
+  /**
+   * 📄 導師端：輸出班級學校排名橫向 PDF (含防翻拍浮水印)
+   */
+  function printHomeroomSchoolRankPdf(targetClass) {
+    const tableEl = document.getElementById(`table-school-rank-${targetClass}`);
+    if (!tableEl) {
+      showAlert('找不到可輸出的學校排名表格！');
+      return;
+    }
+    const curExam = document.getElementById('viewExamType').value;
+    const curYear = document.getElementById('viewYear').value;
+    const curSem = document.getElementById('viewSemester').value;
+
+    const tblHtml = tableEl.outerHTML;
+    const win = window.open('', '', 'width=1200,height=800');
+    win.document.write('<html><head><title>' + targetClass + '班_定期考學校排名</title><style>');
+    win.document.write('@page { size: landscape; margin: 10mm; }');
+    win.document.write('body { font-family: "Microsoft JhengHei", sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 15px; position: relative; }');
+    win.document.write('table { width: 100%; border-collapse: collapse; text-align: center; font-size: 12px; }');
+    win.document.write('tr { page-break-inside: avoid; }');
+    win.document.write('th, td { position: static !important; border: 1px solid #64748b !important; padding: 6px !important; }');
+    win.document.write('th { background-color: #2c3e50 !important; color: white !important; }');
+    win.document.write('</style></head><body>');
+    win.document.write('<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 56px; font-weight: bold; color: rgba(15, 23, 42, 0.12); z-index: 9999; pointer-events: none; white-space: nowrap; letter-spacing: 4px;">依據規定，不得公開呈現學生成績及排名</div>');
+    win.document.write('<h2 style="color:#d35400;text-align:center;margin-bottom:14px;">🏆 ' + curYear + ' 學年度第 ' + curSem + ' 學期（' + curExam + '）— ' + targetClass + ' 班學校排名與各科成績總表</h2>');
+    win.document.write(tblHtml);
+    win.document.write('</body></html>');
+    win.document.close();
+    win.focus();
+    setTimeout(function() { win.print(); win.close(); }, 800);
   }
 
   function exportExcel() {
